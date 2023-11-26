@@ -169,8 +169,7 @@ function plugin_list_view()
 			"ChildL",
 			ImGui.GetContentRegionAvail(ctx) * 0.5,
 			ImGui.GetWindowHeight(ctx) --[[ 260 ]],
-			false,
-			window_flags
+			false
 		)
 	then
 		-- select all
@@ -491,7 +490,7 @@ function CreateToolbar()
 		toolbar = toolbars[floating_keys[tbm.toolbar]]
 	end
 	if tbm.title == "" then
-		toolbar.title = tb_title[tbm.toolbar]
+		toolbar.title = tb_titles[tbm.toolbar]
 	else
 		toolbar.title = tbm.title
 	end
@@ -544,6 +543,8 @@ function CreateToolbar()
 	OverwriteReaperMenu(toolbars)
 end
 
+WAITING = false
+
 ----------------------------------------------------------------------
 -- RUN --
 ----------------------------------------------------------------------
@@ -573,113 +574,117 @@ function Main()
 				SELECTED_PLUGS[#SELECTED_PLUGS + 1] = plugin_list[i]
 			end
 		end
-		if #SELECTED_PLUGS > 0 then
+		if #SELECTED_PLUGS == 0 then
+			reaper.MB("No plugin selected", "Error", 0)
+		else
+			-- resources allocation, parameter saving and initialisation
 			PROCESS_NEXT_FX = true
 			INDEX = 1
-
-			-- resources allocation, parameter saving and initialisation
+			CREATE = true
+			WAITING = false
+			
 			TRACK, _ = InsertDummyTrack()
 			
-			DO_RAW = params.raw.do_raw
+			DO_RAW = p.raw.do_raw
+			RAW_DEST = p.raw.destination
 			
+			CROP = {
+				left = p.cropping.left,
+				right = p.cropping.right,
+				top = p.cropping.top,
+				bottom = p.cropping.bottom
+			}
+
 			if p.thumbnail.do_thumbnail then
 				DO_THUMBNAIL = true
+				T_DEST = p.thumbnail.destination
+				T_PREFIX, T_SUFFIX = p.thumbnail.fname_prefix, p.thumbnail.fname_suffix
+				
 				T_BACKGROUND = create_background(p.thumbnail.background)
 			end
-			
+
 			if p.toolbar_thumbnail.do_thumbnail then
 				DO_TOOLBAR_THUMBNAIL = true
 				TBT_BACKGROUND = create_background(p.toolbar_thumbnail.background)
+				TBT_DEST = p.toolbar_thumbnail.destination
+				TBT_PREFIX, TBT_SUFFIX = p.toolbar_thumbnail.fname_prefix, p.toolbar_thumbnail.fname_suffix
+				ARGB_HOVER, ARGB_CLICK = RGBA2ARGB(p.toolbar_thumbnail.color_hover), RGBA2ARGB(p.toolbar_thumbnail.color_click)
+				T_BACKGROUND = create_background(p.thumbnail.background)
 			end
+
 			
-			CREATE = true
-		else
-			reaper.MB("No plugin selected", "Error", 0)
+			PROCESS = function(screenshot, fxname)
+				
+				local cropped = CreateCrop(screenshot, CROP.left, CROP.right, CROP.top, CROP.bottom)
+				if DO_RAW then
+					local img_path = ThumbnailPath(RAW_DEST, "", fxname, "")
+					reaper.JS_LICE_WritePNG(img_path, cropped, false)
+					--msg(img_path)
+				end
+			
+				-- Thumbnail
+				if DO_THUMBNAIL then
+					local background = CreateCopy(T_BACKGROUND)
+					ScaledOverlay(background, cropped)
+				
+					local img_path = ThumbnailPath(T_DEST, T_PREFIX, fxname, T_SUFFIX)
+					reaper.JS_LICE_WritePNG(img_path, background, false)
+					--msg(img_path)
+				
+					reaper.JS_LICE_DestroyBitmap(background)
+				end
+				
+				-- Toolbar thumbnail
+				if DO_TOOLBAR_THUMBNAIL then
+					local background = CreateCopy(TBT_BACKGROUND)
+				
+					ScaledOverlay(background, cropped)
+					local tb_thumbnail = CreateToolbarThumbnail(background, ARGB_HOVER, ARGB_CLICK)
+				
+					local img_path = ThumbnailPath(path_toolbar_icons, TBT_PREFIX, fxname, TBT_SUFFIX)
+				
+					reaper.JS_LICE_WritePNG(img_path, tb_thumbnail, false)
+					--msg(img_path)
+				
+					reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
+					reaper.JS_LICE_DestroyBitmap(background)
+				end
+			end
+			NEXT_ACTION = function()
+				WAITING = false 
+				INDEX = INDEX + 1
+			end
 		end
 	end
 
 	if PROCESS_NEXT_FX then
-		-- end of processing
-		if INDEX > #SELECTED_PLUGS then
+		if INDEX == #SELECTED_PLUGS then
 			PROCESS_NEXT_FX = false
-			
-			-- create toolbar when all icons have created to prevent issues after potential bugs/interruptions
-			if p.toolbar_maker.do_toolbar then
-				CreateToolbar()
+			NEXT_ACTION = function()
+				WAITING = false
+				-- create toolbar when all icons have created to prevent issues after potential bugs/interruptions
+				if p.toolbar_maker.do_toolbar then
+					CreateToolbar()
+				end                    
+				-- resources deallocation
+					reaper.DeleteTrack(TRACK)
+				if DO_THUMBNAIL then
+					reaper.JS_LICE_DestroyBitmap(T_BACKGROUND)
+				end
+				if DO_TOOLBAR_THUMBNAIL then
+					reaper.JS_LICE_DestroyBitmap(TBT_BACKGROUND)
+				end
 			end
-			
-			-- resources deallocation
-			reaper.DeleteTrack(track)
-			if DO_THUMBNAIL then
-				reaper.JS_LICE_DestroyBitmap(T_BACKGROUND)
-			end
-			if DO_TOOLBAR_THUMBNAIL then
-				reaper.JS_LICE_DestroyBitmap(TBT_BACKGROUND)
-			end
-						
-			goto continue
 		end
 		local fxname = SELECTED_PLUGS_TITLES[INDEX]
 		
-		
-		local FXIDX = reaper.TrackFX_GetByName(TRACK, fxname, true)
-		if CREATE then
-			reaper.TrackFX_Show(TRACK, FXIDX, 3)
-			CREATE = false
-			TRY = 0
-		else
-			TRY = TRY + 1
-		end
-		
-		local is_fx_appearing = reaper.TrackFX_GetFloatingWindow(TRACK, FXIDX)
-		if is_fx_appearing then
-			INDEX = INDEX + 1
-			CREATE = true
-		else
+		if WAITING then
 			goto continue
 		end
 
-		local pr = params.raw
-		local pc = params.cropping
-		local pt = params.thumbnail
-		local ptbt = params.toolbar_thumbnail
-
-		local screenshot = CaptureOpenedFxFloatingWindow(TRACK, fxname)
-		local cropped = CreateCrop(bmp, pc.left, pc.right, pc.top, pc.bottom)
-
-
-		-- Export original cropped
-		if DO_RAW then
-			local img_path = ThumbnailPath(pr.destination, "", filename, "")
-			reaper.JS_LICE_WritePNG(img_path, cropped, false)
-		end
-
-		-- Thumbnail
-		if DO_THUMBNAIL then
-			local background = CreateCopy(T_BACKGROUND)
-			ScaledOverlay(background, cropped)
-
-			local t_path = ThumbnailPath(pt.destination, pt.fname_prefix, fxname, pt.fname_suffix)
-			reaper.JS_LICE_WritePNG(t_path, background, false)
-			
-			reaper.JS_LICE_DestroyBitmap(background)
-		end
-
-		-- Toolbar thumbnail
-		if DO_TOOLBAR_THUMBNAIL then
-			local background = CreateCopy(TBT_BACKGROUND)
-
-			ScaledOverlay(background, cropped)
-			local tb_thumbnail =
-				CreateToolbarThumbnail(background, RGBA2ARGB(ptbt.color_hover), RGBA2ARGB(ptbt.color_click))
-
-			local tbt_path = ThumbnailPath(path_toolbar_icons, ptbt.fname_prefix, fxname, ptbt.fname_suffix)
-
-			reaper.JS_LICE_WritePNG(tbt_path, tb_thumbnail, false)
-
-			reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
-			reaper.JS_LICE_DestroyBitmap(background)
-		end
+		WAITING = true
+		ScreenshotFX_WithProcess(TRACK, fxname, params.delay_s, PROCESS, true, NEXT_ACTION)
+ 
 	end
 
 	::continue::
