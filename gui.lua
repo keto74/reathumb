@@ -45,6 +45,48 @@ local plugin_list = GetFxList()
 local toolbars, floating_keys = ParseReaperMenu()
 local fxopts = ParseReaperFxOptions()
 
+-- defaults
+local default_width, default_height = 400, 200
+local default = {
+	background = {
+		width = default_width,
+		height = default_height,
+		color = 0x72909ac8,
+		gradient = 1, -- linear
+		color1 = 0x000000ff,
+		color2 = 0xffffffff,
+		steps = 50,
+		conic = {
+			x = default_width/2,
+			y = default_height/2,
+			angle = math.pi/4,
+		},
+		linear = {
+			h ={
+				x1 = 0,
+				x2 = default_width,
+			},
+			mix ={
+				x1 = 0,
+				x2 = default_width,
+				y1 = 0,
+				y2 = default_height,
+			},
+			v ={
+				y1 = 0,
+				y2 = default_height,
+			},
+			mode = 2
+		},
+		radial = {
+			x = 0,
+			y = default_height,
+			radius = math.max(default_width, default_height)/2,
+		},
+		file = thispath .. "background_example.png",
+	}
+}
+
 -- params
 local params = {}
 params.sel_plug = {}
@@ -65,59 +107,12 @@ params.cropping = {
 params.raw = {
 	do_raw = true,
 	destination  = thispath.."raw",
-	background = {
-		mode = 1, -- gradient
-		color = 0x72909ac8,
-		width = 400,
-		height = 200,
-		gradient = 1, -- linear
-		color1 = 0x72909aff,
-		color2 = 0xddddddff,
-		file = thispath .. "background_example.png",
-	},
 }
 
 params.thumbnail = {
 	do_thumbnail = true,
 	destination  = thispath.."thumbnails",
-	background = {
-		mode = 1, -- gradient
-		color = 0x72909ac8,
-		width = 400,
-		height = 200,
-		gradient = 1, -- linear
-		color1 = 0x000000ff,
-		color2 = 0xffffffff,
-		steps = 50,
-		conic = {
-			x = nil,
-			y = nil,
-			angle = math.pi/4,
-		},
-		linear = {
-			h ={
-				x1 = nil,
-				x2 = nil,
-			},
-			mix ={
-				x1 = nil,
-				x2 = nil,
-				y1 = nil,
-				y2 = nil,
-			},
-			v ={
-				y1 = nil,
-				y2 = nil,
-			},
-			mode = 2
-		},
-		radial = {
-			x = nil,
-			y = nil,
-			radius = nil,
-		},
-		file = thispath .. "background_example.png",
-	},
+	background = deepcopy(default.background),
 	fname_prefix = "thumb_",
 	fname_suffix = "",
 }
@@ -125,44 +120,7 @@ params.thumbnail = {
 params.toolbar_thumbnail = {
 	do_thumbnail = true,
 	destination  = thispath.."toolbar_thumbnails",
-	background = {
-		mode = 1,
-		color = 0x72909ac8,
-		width = 400,
-		height = 200,
-		gradient = 1, -- linear
-		color1 = 0x000000ff,
-		color2 = 0xffffffff,
-		steps = 50,
-		conic = {
-			x = nil,
-			y = nil,
-			angle = math.pi/4,
-		},
-		linear = {
-			h ={
-				x1 = nil,
-				x2 = nil,
-			},
-			mix ={
-				x1 = nil,
-				x2 = nil,
-				y1 = nil,
-				y2 = nil,
-			},
-			v ={
-				y1 = nil,
-				y2 = nil,
-			},
-			mode = 2
-		},
-		radial = {
-			x = nil,
-			y = nil,
-			radius = nil,
-		},
-		file = thispath .. "background_example.png",
-	},
+	background = deepcopy(default.background),
 	fname_prefix = "tb_thumb_",
 	fname_suffix = "",
 	color_hover = 0x349F3488,
@@ -359,10 +317,17 @@ function controller_view()
 					end
 					_, pp.h.x1, pp.h.x2 = reaper.ImGui_DragInt2(ctx, "X begin/end", pp.h.x1, pp.h.x2, 1) --, 0, p.width - 1)
 				elseif pp.mode == 1 then -- mix
+					if pp.mix.x1 == nil then
+						pp.mix.x1, pp.mix.x2 = 0, p.width - 1
+						pp.v.x1, pp.v.x2 = 0, p.height - 1
+					end
 					_, pp.mix.x1, pp.mix.x2 = reaper.ImGui_DragInt2(ctx, "X begin/end", pp.mix.x1, pp.mix.x2, 1) --, 0, p.width - 1)
 					reaper.ImGui_SameLine(ctx)
 					_, pp.mix.y1, pp.mix.y2 = reaper.ImGui_DragInt2(ctx, "Y begin/end", pp.mix.y1, pp.mix.y2, 1) --, 0, p.height - 1)
 				else -- vertical
+					if pp.v.y1 == nil then
+						pp.v.y1, pp.v.y2 = 0, p.height - 1
+					end
 					_, pp.v.y1, pp.v.y2 = reaper.ImGui_DragInt2(ctx, "Y begin/end", pp.v.y1, pp.v.y2, 1) --, 0, p.height - 1)
 				end
 			else -- radial
@@ -492,6 +457,9 @@ function controller_view()
 	end
 	if ImGui.BeginChild(ctx, "ChildR", ImGui.GetContentRegionAvail(ctx), ImGui.GetWindowHeight(ctx), false, nil) then
 		ImGui.PushItemWidth(ctx, 100)
+		
+		-- UI --
+		
 		_, params.delay_s = ImGui.SliderDouble(ctx, "Delay (s)", params.delay_s, 0.001, 3)
 		crop_control()
 		raw_control()
@@ -499,7 +467,6 @@ function controller_view()
 		thumbnail_toolbar_control()
 		--toolbar_maker_control()
 		ImGui.PopItemWidth(ctx)
-
 		-- screenshot button
 		if reaper.ImGui_Button(ctx, "Screenshot") then
 			local selected_plugs_title = {}
@@ -511,13 +478,7 @@ function controller_view()
 				end
 			end
 			local pt = params.thumbnail
-			--[[if pt.background.linear.v.y1 == nil then
-				msg("why y1!!!")
-			end
-			if pt.background.linear.v.y2 == nil then
-				msg("why y2!!!")
-			end]]--
-			
+
 			if #selected_plugs > 0 then
 				local track, trackidx = InsertDummyTrack()
 				local track = reaper.GetTrack(0, 0)
@@ -528,29 +489,20 @@ function controller_view()
 				-- Image processing function
 				local process = function(bmp, fxname)
 			
-					local bmp2 = CreateCrop(
-						bmp,
-						params.cropping.left,
-						params.cropping.right,
-						params.cropping.top,
-						params.cropping.bottom
-					)
+					local pc = params.cropping
+					local bmp2 = CreateCrop(bmp, pc.left, pc.right, pc.top, pc.bottom)
 					
 					-- Thumbnail
 					local pt = params.thumbnail
 					if pt.do_thumbnail then
-						--[[if pt.background.linear.v.y1 == nil then
-							msg("why y1!!!")
-						end
-						if pt.background.linear.v.y2 == nil then
-							msg("why y2!!!")
-						end]]--
+						
 						local background = create_background(pt.background)
 						ScaledOverlay(bmp2, background)
   
 						local t_path = ThumbnailPath(path, pt.fname_prefix, fxname, pt.fname_suffix)
 						reaper.JS_LICE_WritePNG(t_path, background, false)
 						reaper.JS_LICE_DestroyBitmap(background)
+
 					end
 
 					-- Toolbar thumbnail
