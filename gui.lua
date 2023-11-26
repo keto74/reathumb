@@ -469,147 +469,7 @@ function controller_view()
 		ImGui.PopItemWidth(ctx)
 		-- screenshot button
 		if reaper.ImGui_Button(ctx, "Screenshot") then
-			local selected_plugs_title = {}
-			local selected_plugs = {}
-			for i, sel in ipairs(params.sel_plug) do
-				if sel then
-					selected_plugs_title[#selected_plugs_title + 1] = plugin_list[i].title
-					selected_plugs[#selected_plugs + 1] = plugin_list[i]
-				end
-			end
-			local pt = params.thumbnail
-
-			if #selected_plugs > 0 then
-				local track, trackidx = InsertDummyTrack()
-				local track = reaper.GetTrack(0, 0)
-				local path = reaper.GetResourcePath() .. "/screenshots/"
-				local delete_dummy_track = function()
-					reaper.DeleteTrack(track)
-				end
-				-- Image processing function
-				local process = function(bmp, fxname)
-			
-					local pc = params.cropping
-					local bmp2 = CreateCrop(bmp, pc.left, pc.right, pc.top, pc.bottom)
-					
-					-- Thumbnail
-					local pt = params.thumbnail
-					if pt.do_thumbnail then
-						
-						local background = create_background(pt.background)
-						ScaledOverlay(bmp2, background)
-  
-						local t_path = ThumbnailPath(path, pt.fname_prefix, fxname, pt.fname_suffix)
-						reaper.JS_LICE_WritePNG(t_path, background, false)
-						reaper.JS_LICE_DestroyBitmap(background)
-
-					end
-
-					-- Toolbar thumbnail
-					local ptbt = params.toolbar_thumbnail
-					if ptbt.do_thumbnail then
-						local background = create_background(ptbt.background)
-
-						ScaledOverlay(bmp2, background)
-						local tb_thumbnail = CreateToolbarThumbnail(
-							background,
-							RGBA2ARGB(ptbt.color_hover),
-							RGBA2ARGB(ptbt.color_click)
-						)
-						local tbt_path = ThumbnailPath(path_toolbar_icons, ptbt.fname_prefix, fxname, ptbt.fname_suffix)
-						reaper.JS_LICE_WritePNG(tbt_path, tb_thumbnail, false)
-						reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
-						reaper.JS_LICE_DestroyBitmap(background)
-					end
-
-					-- Raw captures
-					if params.raw.do_raw then
-						local img_path = ThumbnailPath(path, "", filename, "")
-						reaper.JS_LICE_WritePNG(img_path, bmp2, false)
-					end
-					
-					reaper.JS_LICE_DestroyBitmap(bmp2)
-					reaper.JS_LICE_DestroyBitmap(bmp)
-					return bmp2
-				end
-				
-				-- Start capture (will defer)
-				ScreenshotFXList_WithProcess(
-					track,
-					selected_plugs_title,
-					params.delay_s,
-					process,
-					nil,
-					true,
-					delete_dummy_track
-				)
-				
-				-- Create toolbar
-				if params.toolbar_maker.do_toolbar then
-					local tbm = params.toolbar_maker
-					local toolbar = {
-						items = {},
-						icons = {},
-					}
-					if floating_keys[tbm.toolbar] ~= nil and not tbm.overwrite then
-						toolbar = toolbars[floating_keys[tbm.toolbar]]
-					end
-					if tbm.title == "" then
-						toolbar.title = tb_title[tbm.toolbar]
-					else
-						toolbar.title = tbm.title
-					end
-					local max_fxopts_id = MaxFxOptionsId(fxopts)
-					local fxopts_needs_overwrite = false
-					local item_exists = function(action_id)
-						local res = nil
-						for i, item in ipairs(toolbar.items) do
-							if item.action_id == action_id then
-								res = i
-								break
-							end
-						end
-						return res
-					end
-					for _, fx in ipairs(selected_plugs) do
-						local item = {
-							action_id = nil,
-							action_name = string.format("Insert FX: %s", fx.title),
-						}
-						if fxopts[fx.fname] == nil then
-							fxopts_needs_overwrite = true
-							local action_id = FXNameToActionID(fx.fname)
-							fxopts[fx.fname] = {
-								id = max_fxopts_id,
-								action_id = action_id,
-							}
-							item.action_id = action_id
-							max_fxopts_id = max_fxopts_id + 1
-						else
-							item.action_id = fxopts[fx.fname].action_id
-						end
-						local idx = item_exists(item.action_id)
-						if idx == nil then
-							toolbar.items[#toolbar.items + 1] = item
-							idx = #toolbar.items
-						else
-							toolbar.items[idx] = item
-						end
-						-- icons are 0 indexed, string index is for allowing text icons
-						local tt = params.toolbar_thumbnail
-						toolbar.icons[tostring(idx - 1)] = ThumbnailPath(path_toolbar_icons, tt.fname_prefix, fx.title, tt.fname_suffix)
-						--string.format("%s/%s%s%s.png", path_toolbar_icons, tt.fname_prefix, fx.title, tt.fname_suffix)
-					end
-					local section = "Floating toolbar " .. tonumber(tbm.toolbar)
-					toolbars[section] = toolbar
-					if fxopts_needs_overwrite then
-						OverwriteReaperFxOptions(fxopts)
-					end
-					OverwriteReaperMenu(toolbars)
-				end
-			else
-				reaper.MB("No plugin selected", "Error", 0)
-			end
+			PROCESS_NEXT_FX = true
 		end
 		ImGui.EndChild(ctx)
 	end
@@ -623,10 +483,159 @@ function Main()
 	-- YOUR CODE HERE --
 	--------------------
 
+	-- UI
 	plugin_list_view()
 	ImGui.SameLine(ctx)
 	controller_view()
-end
+
+
+	-- Action
+	if PROCESS_NEXT_FX then
+		PROCESS_NEXT_FX = false
+		local selected_plugs_title = {}
+		local selected_plugs = {}
+		for i, sel in ipairs(params.sel_plug) do
+			if sel then
+				selected_plugs_title[#selected_plugs_title + 1] = plugin_list[i].title
+				selected_plugs[#selected_plugs + 1] = plugin_list[i]
+			end
+		end
+		local pt = params.thumbnail
+
+		if #selected_plugs > 0 then
+			local track, trackidx = InsertDummyTrack()
+			local track = reaper.GetTrack(0, 0)
+			local path = reaper.GetResourcePath() .. "/screenshots/"
+			local delete_dummy_track = function()
+				reaper.DeleteTrack(track)
+			end
+			-- Image processing function
+			local process = function(bmp, fxname)
+		
+				local pc = params.cropping
+				local bmp2 = CreateCrop(bmp, pc.left, pc.right, pc.top, pc.bottom)
+				
+				-- Thumbnail
+				local pt = params.thumbnail
+				if pt.do_thumbnail then
+					
+					local background = create_background(pt.background)
+					ScaledOverlay(bmp2, background)
+
+					local t_path = ThumbnailPath(path, pt.fname_prefix, fxname, pt.fname_suffix)
+					reaper.JS_LICE_WritePNG(t_path, background, false)
+					reaper.JS_LICE_DestroyBitmap(background)
+
+				end
+
+				-- Toolbar thumbnail
+				local ptbt = params.toolbar_thumbnail
+				if ptbt.do_thumbnail then
+					local background = create_background(ptbt.background)
+
+					ScaledOverlay(bmp2, background)
+					local tb_thumbnail = CreateToolbarThumbnail(
+						background,
+						RGBA2ARGB(ptbt.color_hover),
+						RGBA2ARGB(ptbt.color_click)
+					)
+					local tbt_path = ThumbnailPath(path_toolbar_icons, ptbt.fname_prefix, fxname, ptbt.fname_suffix)
+					reaper.JS_LICE_WritePNG(tbt_path, tb_thumbnail, false)
+					reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
+					reaper.JS_LICE_DestroyBitmap(background)
+				end
+
+				-- Raw captures
+				if params.raw.do_raw then
+					local img_path = ThumbnailPath(path, "", filename, "")
+					reaper.JS_LICE_WritePNG(img_path, bmp2, false)
+				end
+				
+				reaper.JS_LICE_DestroyBitmap(bmp2)
+				reaper.JS_LICE_DestroyBitmap(bmp)
+				return bmp2
+			end
+			
+			-- Start capture (will defer)
+			ScreenshotFXList_WithProcess(
+				track,
+				selected_plugs_title,
+				params.delay_s,
+				process,
+				nil,
+				true,
+				delete_dummy_track
+			)
+			
+			-- Create toolbar
+			if params.toolbar_maker.do_toolbar then
+				local tbm = params.toolbar_maker
+				local toolbar = {
+					items = {},
+					icons = {},
+				}
+				if floating_keys[tbm.toolbar] ~= nil and not tbm.overwrite then
+					toolbar = toolbars[floating_keys[tbm.toolbar]]
+				end
+				if tbm.title == "" then
+					toolbar.title = tb_title[tbm.toolbar]
+				else
+					toolbar.title = tbm.title
+				end
+				local max_fxopts_id = MaxFxOptionsId(fxopts)
+				local fxopts_needs_overwrite = false
+				local item_exists = function(action_id)
+					local res = nil
+					for i, item in ipairs(toolbar.items) do
+						if item.action_id == action_id then
+							res = i
+							break
+						end
+					end
+					return res
+				end
+				for _, fx in ipairs(selected_plugs) do
+					local item = {
+						action_id = nil,
+						action_name = string.format("Insert FX: %s", fx.title),
+					}
+					if fxopts[fx.fname] == nil then
+						fxopts_needs_overwrite = true
+						local action_id = FXNameToActionID(fx.fname)
+						fxopts[fx.fname] = {
+							id = max_fxopts_id,
+							action_id = action_id,
+						}
+						item.action_id = action_id
+						max_fxopts_id = max_fxopts_id + 1
+					else
+						item.action_id = fxopts[fx.fname].action_id
+					end
+					local idx = item_exists(item.action_id)
+					if idx == nil then
+						toolbar.items[#toolbar.items + 1] = item
+						idx = #toolbar.items
+					else
+						toolbar.items[idx] = item
+					end
+					-- icons are 0 indexed, string index is for allowing text icons
+					local tt = params.toolbar_thumbnail
+					toolbar.icons[tostring(idx - 1)] = ThumbnailPath(path_toolbar_icons, tt.fname_prefix, fx.title, tt.fname_suffix)
+					--string.format("%s/%s%s%s.png", path_toolbar_icons, tt.fname_prefix, fx.title, tt.fname_suffix)
+				end
+				local section = "Floating toolbar " .. tonumber(tbm.toolbar)
+				toolbars[section] = toolbar
+				if fxopts_needs_overwrite then
+					OverwriteReaperFxOptions(fxopts)
+				end
+				OverwriteReaperMenu(toolbars)
+			end
+		else
+			reaper.MB("No plugin selected", "Error", 0)
+		end
+	end
+	
+end -- Main
 
 function Run()
 	if set_dock_id then
