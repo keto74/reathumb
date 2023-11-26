@@ -8,13 +8,13 @@ function PropScalingDim(iw, ih, ow, oh)
 end
 
 -- scale img proportionally to fit on background and overlay it (centered)
-function ScaledOverlay(img, background)
+function ScaledOverlay(dest, img)
 	local h, w = reaper.JS_LICE_GetHeight(img), reaper.JS_LICE_GetWidth(img)
-	local dh, dw = reaper.JS_LICE_GetHeight(background), reaper.JS_LICE_GetWidth(background)
+	local dh, dw = reaper.JS_LICE_GetHeight(dest), reaper.JS_LICE_GetWidth(dest)
 	local sw, sh = PropScalingDim(w, h, dw, dh)
 	local offx, offy = math.floor((dw - sw) / 2), math.floor((dh - sh) / 2)
 
-	reaper.JS_LICE_ScaledBlit(background, offx, offy, sw, sh, img, 0, 0, w, h, 1, "")
+	reaper.JS_LICE_ScaledBlit(dest, offx, offy, sw, sh, img, 0, 0, w, h, 1, "")
 end
 
 -- crop img
@@ -320,4 +320,11 @@ function ConicGradient(bitmap, x, y, angle, argb1, argb2)
 		end
 	end
 	return bitmap
+end
+
+function CreateCopy(bitmap)
+	local w, h = reaper.JS_LICE_GetWidth(bitmap), reaper.JS_LICE_GetHeight(bitmap)
+	local copy = reaper.JS_LICE_CreateBitmap(true, w, h)
+	reaper.JS_LICE_Blit(copy, 0, 0, bitmap, 0, 0, w, h, 1, "")
+	return copy
 end

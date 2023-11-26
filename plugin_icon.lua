@@ -82,3 +82,58 @@ function ScreenshotFX(track, fxname, delay_s, filename, delete_fx, next_action)
 	end
 	ScreenshotFX_WithProcess(track, fxname, delay_s, id, filename, delete_fx, next_action)
 end
+
+-------------------------------------------------------------------------------
+
+function ScreenshotFX_WithProcess2(track, fxname, delay_s, process_bmp, delete_fx, next_action)
+	function load_fx_and_capture()
+		local fxidx = reaper.TrackFX_GetByName(track, fxname, true)
+		reaper.TrackFX_Show(track, fxidx, 3)
+		time1 = reaper.time_precise()
+
+		function wait_and_capture()
+			local time2 = reaper.time_precise()
+			if time2 - time1 < delay_s then
+				reaper.defer(wait_and_capture)
+			else
+				bmp = CaptureOpenedFxFloatingWindow(track, fxname)
+				process_bmp(bmp, fxname)
+
+				if delete_fx then
+					reaper.TrackFX_Delete(track, fxidx)
+				end
+				-- follow up action
+				if next_action ~= nil then
+					next_action()
+				end
+			end
+		end
+
+		wait_and_capture()
+	end
+
+	load_fx_and_capture()
+end
+
+function ScreenshotFXList_WithProcess2(track, fxlist, delay_s, process_bmp, fname_func, delete_fx, next_action)
+	if fname_func == nil then
+		fname_func = function(fname)
+			return fname
+		end
+	end
+	function iter_foo(idx, track, fxlist, delay_s, process_bmp, delete_fx, next_action)
+		if idx == #fxlist + 1 then
+			if next_action ~= nil then
+				next_action()
+			end
+			return
+		end
+		local iter_me = function()
+			iter_foo(idx + 1, track, fxlist, delay_s, process_bmp, delete_fx, next_action)
+		end
+		local fxname = fxlist[idx]
+
+		ScreenshotFX_WithProcess(track, fxname, delay_s, process_bmp, delete_fx, iter_me)
+	end
+	iter_foo(1, track, fxlist, delay_s, process_bmp, delete_fx, next_action)
+end
