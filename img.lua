@@ -328,3 +328,18 @@ function CreateCopy(bitmap)
 	reaper.JS_LICE_Blit(copy, 0, 0, bitmap, 0, 0, w, h, 1, "")
 	return copy
 end
+
+function ToolbarIconFileSplit(icon_path, path_original, path_hovered, path_clicked)
+	local icon = reaper.JS_LICE_LoadPNG(icon_path)
+	local w, h = reaper.JS_LICE_GetWidth(icon), reaper.JS_LICE_GetHeight(icon)
+	local bmp = reaper.JS_LICE_CreateBitmap(true, w / 3, h)
+	local dw = w / 3
+	reaper.JS_LICE_Blit(bmp, 0, 0, icon, 0, 0, dw, h, 1, "")
+	reaper.JS_LICE_WritePNG(path_original, bmp, false)
+	reaper.JS_LICE_Blit(bmp, 0, 0, icon, dw, 0, dw, h, 1, "")
+	reaper.JS_LICE_WritePNG(path_hovered, bmp, false)
+	reaper.JS_LICE_Blit(bmp, 0, 0, icon, dw << 1, 0, dw, h, 1, "")
+	reaper.JS_LICE_WritePNG(path_clicked, bmp, false)
+	reaper.JS_LICE_DestroyBitmap(icon)
+	reaper.JS_LICE_DestroyBitmap(bmp)
+end

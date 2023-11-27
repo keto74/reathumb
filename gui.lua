@@ -104,26 +104,44 @@ params.cropping = {
 }
 
 params.raw = {
-	do_raw = true,
+	do_raw = false,
 	destination = thispath .. "raw",
+	preview = {
+		bitmap = nil,
+		path = nil,
+	},
 }
 
 params.thumbnail = {
-	do_thumbnail = true,
+	do_thumbnail = false,
 	destination = thispath .. "thumbnails",
 	background = deepcopy(default.background),
 	fname_prefix = "thumb_",
 	fname_suffix = "",
+	preview = {
+		bitmap = nil,
+		path = nil,
+	},
 }
 
 params.toolbar_thumbnail = {
 	do_thumbnail = true,
+	default_destination = true,
 	destination = thispath .. "toolbar_thumbnails",
 	background = deepcopy(default.background),
 	fname_prefix = "tb_thumb_",
 	fname_suffix = "",
 	color_hover = 0x349F3488,
 	color_click = 0x9A0E0E88,
+	preview = {
+		real_mode = true,
+		bitmap = nil,
+		path = nil,
+		path_normal = nil,
+		path_hovered = nil,
+		path_clicked = nil,
+		mousestate = 0,
+	},
 }
 
 local init_toolbar = 1
@@ -445,6 +463,16 @@ function controller_view()
 		if tb.do_thumbnail then
 			--               if reaper.ImGui_CollapsingHeader(ctx, "Toolbar creator") then
 			if ImGui.TreeNode(ctx, "Toolbar thumbnail parameters") then
+				reaper.ImGui_Text(ctx, tb.destination)
+				_, tb.default_destination = reaper.ImGui_Checkbox(ctx, "Reaper toolbar icons folder", tb.default_destination)
+				if not tb.default_destination then
+					if reaper.ImGui_Button(ctx, "Destination...") then
+						rv, folder = reaper.JS_Dialog_BrowseForFolder("Thumbnails destination", tb.destination)
+						if rv ~= 0 then
+							tb.destination = folder
+						end
+					end
+				end
 				background_control(tb.background)
 				_, tb.color_hover =
 					ImGui.ColorEdit4(ctx, "Hover overlay", tb.color_hover, ImGui.ColorEditFlags_NoInputs())
@@ -459,6 +487,66 @@ function controller_view()
 			--               end
 		end
 	end
+	function preview_image(title, p)
+		if p.path ~= nil then
+			if reaper.ImGui_Button(ctx, title) then
+				reaper.ImGui_OpenPopup(ctx, title)
+			end
+			if reaper.ImGui_BeginPopup(ctx, title) then
+				local bitmap = reaper.ImGui_CreateImage(p.path)
+				local w, h = reaper.ImGui_Image_GetSize(bitmap)
+				reaper.ImGui_Image(ctx, bitmap, w, h)
+				reaper.ImGui_EndPopup(ctx)
+			end
+		end
+	end
+	function preview_toolbar_image(title, p)
+		if p.path ~= nil then
+			local open
+			if reaper.ImGui_Button(ctx, title) then
+				open = reaper.ImGui_OpenPopup(ctx, title)
+			end
+			reaper.ImGui_SameLine(ctx)
+			_, p.real_mode = reaper.ImGui_Checkbox(ctx, "Realistic mode", p.real_mode)
+			if reaper.ImGui_BeginPopup(ctx, title) then
+				local path = p.path
+				if p.real_mode then
+					if p.state == 0 then
+						path = p.path_original
+					elseif p.state == 1 then
+						path = p.path_hovered
+					else
+						path = p.path_clicked
+					end
+				end
+				local bitmap = reaper.ImGui_CreateImage(path)
+				local w, h = reaper.ImGui_Image_GetSize(bitmap)
+				reaper.ImGui_Image(ctx, bitmap, w, h)
+				if p.real_mode then
+					p.state = 0
+					if reaper.ImGui_IsItemHovered(ctx) then
+						p.state = 1
+					end
+					if reaper.ImGui_IsItemClicked(ctx) then
+						p.state = 2
+					end
+				end
+				if reaper.ImGui_Button(ctx, 'Close') then
+				  reaper.ImGui_CloseCurrentPopup(ctx)
+				end
+				reaper.ImGui_EndPopup(ctx)
+			end
+			--[[
+			if reaper.ImGui_BeginPopup(ctx, title) then
+				local bitmap = reaper.ImGui_CreateImage(p.path)
+				local w, h = reaper.ImGui_Image_GetSize(bitmap)
+				reaper.ImGui_Image(ctx, bitmap, w, h, 0, 0, w, h/3)
+				reaper.ImGui_EndPopup(ctx)
+			end
+			]]--
+			
+		end
+	end
 	if ImGui.BeginChild(ctx, "ChildR", ImGui.GetContentRegionAvail(ctx), ImGui.GetWindowHeight(ctx), false, nil) then
 		ImGui.PushItemWidth(ctx, 100)
 
@@ -469,12 +557,18 @@ function controller_view()
 		raw_control()
 		thumbnail_control()
 		thumbnail_toolbar_control()
+		
 		--toolbar_maker_control()
 		ImGui.PopItemWidth(ctx)
 		-- screenshot button
 		if reaper.ImGui_Button(ctx, "Screenshot") then
 			START_SCREENSHOT = true
 		end
+		
+		preview_image("Preview screenshot", params.raw.preview)
+		preview_image("Preview thumbnail", params.thumbnail.preview)
+		preview_toolbar_image("Preview toolbar thumbnail", params.toolbar_thumbnail.preview)
+
 		ImGui.EndChild(ctx)
 	end
 end
@@ -543,6 +637,51 @@ function CreateToolbar()
 	OverwriteReaperMenu(toolbars)
 end
 
+
+function GetProcessingFunction()
+	return function(screenshot, fxname)
+		local cropped = CreateCrop(screenshot, P.cropping.left, P.cropping.right, P.cropping.top, P.cropping.bottom)
+		if P.raw.do_raw then
+			local img_path = ThumbnailPath(P.raw.destination, "", fxname, "")
+			reaper.JS_LICE_WritePNG(img_path, cropped, false)
+			--msg(img_path)
+			RAW_PATH = img_path
+		end
+	
+		-- Thumbnail
+		if P.thumbnail.do_thumbnail then
+			local p = P.thumbnail
+			local background = CreateCopy(T_BACKGROUND)
+			ScaledOverlay(background, cropped)
+		
+			local img_path = ThumbnailPath(p.destination, p.fname_prefix, fxname, p.fname_suffix)
+			reaper.JS_LICE_WritePNG(img_path, background, false)
+			--msg(img_path)
+		
+			reaper.JS_LICE_DestroyBitmap(background)
+			T_PATH = img_path
+		end
+		
+		-- Toolbar thumbnail
+		if P.toolbar_thumbnail.do_thumbnail then
+			local p = P.toolbar_thumbnail
+			local background = CreateCopy(TBT_BACKGROUND)
+		
+			ScaledOverlay(background, cropped)
+			local tb_thumbnail = CreateToolbarThumbnail(background, RGBA2ARGB(p.color_hover), RGBA2ARGB(p.color_click))
+		
+			local img_path = ThumbnailPath(p.destination, p.fname_prefix, fxname, p.fname_suffix)
+		
+			reaper.JS_LICE_WritePNG(img_path, tb_thumbnail, false)
+			--msg(img_path)
+		
+			reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
+			reaper.JS_LICE_DestroyBitmap(background)
+			TBT_PATH = img_path
+		end
+	end
+end
+
 WAITING = false
 
 ----------------------------------------------------------------------
@@ -560,8 +699,6 @@ function Main()
 
 	-- Actions
 
-	local p = params
-
 	-- initialisation
 	if START_SCREENSHOT then
 		START_SCREENSHOT = false
@@ -577,79 +714,22 @@ function Main()
 		if #SELECTED_PLUGS == 0 then
 			reaper.MB("No plugin selected", "Error", 0)
 		else
-			-- resources allocation, parameter saving and initialisation
+			-- parameter saving, resources allocations and initialisations
+			P = deepcopy(params)
+
+			TRACK, _ = InsertDummyTrack()
+			if P.thumbnail.do_thumbnail then
+				T_BACKGROUND = create_background(P.thumbnail.background)
+			end
+			if P.toolbar_thumbnail.do_thumbnail then
+				TBT_BACKGROUND = create_background(P.toolbar_thumbnail.background)
+			end
+			
 			PROCESS_NEXT_FX = true
 			INDEX = 1
 			CREATE = true
 			WAITING = false
-			
-			TRACK, _ = InsertDummyTrack()
-			
-			DO_RAW = p.raw.do_raw
-			RAW_DEST = p.raw.destination
-			
-			CROP = {
-				left = p.cropping.left,
-				right = p.cropping.right,
-				top = p.cropping.top,
-				bottom = p.cropping.bottom
-			}
-
-			if p.thumbnail.do_thumbnail then
-				DO_THUMBNAIL = true
-				T_DEST = p.thumbnail.destination
-				T_PREFIX, T_SUFFIX = p.thumbnail.fname_prefix, p.thumbnail.fname_suffix
-				
-				T_BACKGROUND = create_background(p.thumbnail.background)
-			end
-
-			if p.toolbar_thumbnail.do_thumbnail then
-				DO_TOOLBAR_THUMBNAIL = true
-				TBT_BACKGROUND = create_background(p.toolbar_thumbnail.background)
-				TBT_DEST = p.toolbar_thumbnail.destination
-				TBT_PREFIX, TBT_SUFFIX = p.toolbar_thumbnail.fname_prefix, p.toolbar_thumbnail.fname_suffix
-				ARGB_HOVER, ARGB_CLICK = RGBA2ARGB(p.toolbar_thumbnail.color_hover), RGBA2ARGB(p.toolbar_thumbnail.color_click)
-				T_BACKGROUND = create_background(p.thumbnail.background)
-			end
-
-			
-			PROCESS = function(screenshot, fxname)
-				
-				local cropped = CreateCrop(screenshot, CROP.left, CROP.right, CROP.top, CROP.bottom)
-				if DO_RAW then
-					local img_path = ThumbnailPath(RAW_DEST, "", fxname, "")
-					reaper.JS_LICE_WritePNG(img_path, cropped, false)
-					--msg(img_path)
-				end
-			
-				-- Thumbnail
-				if DO_THUMBNAIL then
-					local background = CreateCopy(T_BACKGROUND)
-					ScaledOverlay(background, cropped)
-				
-					local img_path = ThumbnailPath(T_DEST, T_PREFIX, fxname, T_SUFFIX)
-					reaper.JS_LICE_WritePNG(img_path, background, false)
-					--msg(img_path)
-				
-					reaper.JS_LICE_DestroyBitmap(background)
-				end
-				
-				-- Toolbar thumbnail
-				if DO_TOOLBAR_THUMBNAIL then
-					local background = CreateCopy(TBT_BACKGROUND)
-				
-					ScaledOverlay(background, cropped)
-					local tb_thumbnail = CreateToolbarThumbnail(background, ARGB_HOVER, ARGB_CLICK)
-				
-					local img_path = ThumbnailPath(path_toolbar_icons, TBT_PREFIX, fxname, TBT_SUFFIX)
-				
-					reaper.JS_LICE_WritePNG(img_path, tb_thumbnail, false)
-					--msg(img_path)
-				
-					reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
-					reaper.JS_LICE_DestroyBitmap(background)
-				end
-			end
+			PROCESS = GetProcessingFunction()
 			NEXT_ACTION = function()
 				WAITING = false 
 				INDEX = INDEX + 1
@@ -659,20 +739,37 @@ function Main()
 
 	if PROCESS_NEXT_FX then
 		if INDEX == #SELECTED_PLUGS then
+			------- ENDING CODE HERE --------
 			PROCESS_NEXT_FX = false
 			NEXT_ACTION = function()
 				WAITING = false
 				-- create toolbar when all icons have created to prevent issues after potential bugs/interruptions
-				if p.toolbar_maker.do_toolbar then
+				if P.toolbar_maker.do_toolbar then
 					CreateToolbar()
 				end                    
 				-- resources deallocation
-					reaper.DeleteTrack(TRACK)
-				if DO_THUMBNAIL then
+				reaper.DeleteTrack(TRACK)
+				if P.thumbnail.do_thumbnail then
 					reaper.JS_LICE_DestroyBitmap(T_BACKGROUND)
 				end
-				if DO_TOOLBAR_THUMBNAIL then
+				if P.toolbar_thumbnail.do_thumbnail then
 					reaper.JS_LICE_DestroyBitmap(TBT_BACKGROUND)
+				end
+				
+				-- Setting up previews
+				if P.raw.do_raw then
+					params.raw.preview.path = RAW_PATH
+				end
+				if P.thumbnail.do_thumbnail then
+					params.thumbnail.preview.path = T_PATH
+				end
+				if P.toolbar_thumbnail.do_thumbnail then
+					local p = params.toolbar_thumbnail.preview
+					p.path = TBT_PATH
+					p.path_original = thispath .. "toolbar_thumbnail_original.png"
+					p.path_hovered = thispath .. "toolbar_thumbnail_hovered.png"
+					p.path_clicked = thispath .. "toolbar_thumbnail_clicked.png"
+					ToolbarIconFileSplit(TBT_PATH, p.path_original, p.path_hovered, p.path_clicked)
 				end
 			end
 		end
