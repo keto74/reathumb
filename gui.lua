@@ -54,6 +54,7 @@ local default = {
 		height = default_height,
 		file = thispath .. "background_example.png",
 		color = 0x72909ac8,
+		preview = nil,
 		gradient = {
 			mode = 1, -- 0: conic, 1: linear, 2: radial
 			color1 = 0x000000ff,
@@ -272,6 +273,9 @@ function EndDisabled(v)
 	end
 end
 
+try = {
+	x0 = 0, x1 = 1, y0 = 0, y1 = 1
+}
 function controller_view()
 	function crop_control()
 		local pc = params.cropping
@@ -333,7 +337,7 @@ function controller_view()
 				_, c.y = reaper.ImGui_DragInt(ctx, "y", c.y, 1, 0, p.height - 1)
 				_, c.angle = reaper.ImGui_DragDouble(ctx, "angle (rad)", c.angle, 1, 0, math.pi)
 			elseif g.mode == 1 then -- linear
-				local l = p.linear
+				local l = g.linear
 				reaper.ImGui_SameLine(ctx)
 
 				local linear_items = "Horizontal\0Mix\0Vertical\0"
@@ -511,43 +515,30 @@ function controller_view()
 			end
 			reaper.ImGui_SameLine(ctx)
 			_, p.real_mode = reaper.ImGui_Checkbox(ctx, "Realistic mode", p.real_mode)
-			if reaper.ImGui_BeginPopup(ctx, title) then
-				local path = p.path
-				if p.real_mode then
-					if p.state == 0 then
-						path = p.path_original
-					elseif p.state == 1 then
-						path = p.path_hovered
-					else
-						path = p.path_clicked
-					end
-				end
-				local bitmap = reaper.ImGui_CreateImage(path)
-				local w, h = reaper.ImGui_Image_GetSize(bitmap)
-				reaper.ImGui_Image(ctx, bitmap, w, h)
-				if p.real_mode then
-					p.state = 0
-					if reaper.ImGui_IsItemHovered(ctx) then
-						p.state = 1
-					end
-					if reaper.ImGui_IsItemClicked(ctx) then
-						p.state = 2
-					end
-				end
-				if reaper.ImGui_Button(ctx, "Close") then
-					reaper.ImGui_CloseCurrentPopup(ctx)
-				end
-				reaper.ImGui_EndPopup(ctx)
-			end
-			--[[
+
 			if reaper.ImGui_BeginPopup(ctx, title) then
 				local bitmap = reaper.ImGui_CreateImage(p.path)
 				local w, h = reaper.ImGui_Image_GetSize(bitmap)
-				reaper.ImGui_Image(ctx, bitmap, w, h, 0, 0, w, h/3)
+				if p.real_mode then  -- "realistic" toolbar thumbnail preview
+					if p.mousestate == 0 then
+						reaper.ImGui_Image(ctx, bitmap, w/3, h, 0, 0, 1/3)
+					elseif p.mousestate == 1 then
+						reaper.ImGui_Image(ctx, bitmap, w/3, h, 1/3, 0, 2/3)
+					else
+						reaper.ImGui_Image(ctx, bitmap, w/3, h, 2/3, 0, 1)
+					end
+					p.mousestate = 0
+					if reaper.ImGui_IsItemHovered(ctx) then
+						p.mousestate = 1
+					end
+					if reaper.ImGui_IsItemClicked(ctx) then
+						p.mousestate = 2
+					end
+				else  -- full image preview
+					reaper.ImGui_Image(ctx, bitmap, w, h)
+				end
 				reaper.ImGui_EndPopup(ctx)
 			end
-			]]
-			--
 		end
 	end
 	if ImGui.BeginChild(ctx, "ChildR", ImGui.GetContentRegionAvail(ctx), ImGui.GetWindowHeight(ctx), false, nil) then
