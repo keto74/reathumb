@@ -49,41 +49,43 @@ local fxopts = ParseReaperFxOptions()
 local default_width, default_height = 400, 200
 local default = {
 	background = {
+		mode = 1, -- 0: color, 1: gradient, 2: file
 		width = default_width,
 		height = default_height,
-		color = 0x72909ac8,
-		gradient = 1, -- linear
-		color1 = 0x000000ff,
-		color2 = 0xffffffff,
-		steps = 50,
-		conic = {
-			x = default_width / 2,
-			y = default_height / 2,
-			angle = math.pi / 4,
-		},
-		linear = {
-			h = {
-				x1 = 0,
-				x2 = default_width,
-			},
-			mix = {
-				x1 = 0,
-				x2 = default_width,
-				y1 = 0,
-				y2 = default_height,
-			},
-			v = {
-				y1 = 0,
-				y2 = default_height,
-			},
-			mode = 2,
-		},
-		radial = {
-			x = 0,
-			y = default_height,
-			radius = math.max(default_width, default_height) / 2,
-		},
 		file = thispath .. "background_example.png",
+		color = 0x72909ac8,
+		gradient = {
+			mode = 1, -- 0: conic, 1: linear, 2: radial
+			color1 = 0x000000ff,
+			color2 = 0xffffffff,
+			conic = {
+				x = default_width / 2,
+				y = default_height / 2,
+				angle = math.pi / 4,
+			},
+			linear = {
+				mode = 2, -- 0: horizontal, 1: mix, 2: vertical
+				h = {
+					x1 = 0,
+					x2 = default_width,
+				},
+				mix = {
+					x1 = 0,
+					x2 = default_width,
+					y1 = 0,
+					y2 = default_height,
+				},
+				v = {
+					y1 = 0,
+					y2 = default_height,
+				},
+			},
+			radial = {
+				x = 0,
+				y = default_height,
+				radius = math.max(default_width, default_height) / 2,
+			},
+		},
 	},
 }
 
@@ -221,29 +223,21 @@ function create_background(p)
 		return CreateColorImage(RGBA2ARGB(p.color), p.width, p.height)
 	elseif p.mode == 1 then
 		local bmp = reaper.JS_LICE_CreateBitmap(true, p.width, p.height)
-		local col1, col2 = RGBA2ARGB(p.color1), RGBA2ARGB(p.color2)
-		local steps = p.steps
-		if p.gradient == 0 then -- conic
-			return ConicGradient(bmp, p.conic.x, p.conic.y, p.conic.angle, col1, col2, p.steps)
-		elseif p.gradient == 1 then -- linear
-			local pp = p.linear
-			if pp.mode == 0 then -- Horizontal
-				return LinearHGradient(bmp, p.linear.h.x1, p.linear.h.x2, col1, col2)
-			elseif pp.mode == 2 then -- Vertical
-				return LinearVGradient(bmp, p.linear.v.y1, p.linear.v.y2, col1, col2)
+		local g = p.gradient
+		local col1, col2 = RGBA2ARGB(g.color1), RGBA2ARGB(g.color2)
+		if g.mode == 0 then -- conic
+			return ConicGradient(bmp, g.conic.x, g.conic.y, g.conic.angle, col1, col2)
+		elseif g.mode == 1 then -- linear
+			local l = g.linear
+			if l.mode == 0 then -- Horizontal
+				return LinearHGradient(bmp, l.h.x1, l.h.x2, col1, col2)
+			elseif l.mode == 2 then -- Vertical
+				return LinearVGradient(bmp, l.v.y1, l.v.y2, col1, col2)
 			else
-				return LinearGradient(
-					bmp,
-					p.linear.mix.x1,
-					p.linear.mix.x2,
-					p.linear.mix.y1,
-					p.linear.mix.y2,
-					col1,
-					col2
-				)
+				return LinearGradient(bmp, l.mix.x1, l.mix.x2, l.mix.y1, l.mix.y2, col1, col2)
 			end
 		else -- radial
-			return RadialGradient(bmp, p.radial.x, p.radial.y, p.radial.radius, col1, col2, p.steps)
+			return RadialGradient(bmp, g.radial.x, g.radial.y, g.radial.radius, col1, col2)
 		end
 	else
 		local fname = p.file
@@ -284,7 +278,6 @@ function controller_view()
 		_, pc.do_crop = reaper.ImGui_Checkbox(ctx, "Crop window borders", pc.do_crop)
 		BeginDisabled(not pc.do_crop)
 		if ImGui.TreeNode(ctx, "Cropping parameters") then
-			--_, params.cropping.left = reaper.ImGui_SliderInt(ctx, "left", params.cropping.left, 0, 50)
 			reaper.ImGui_PushItemWidth(ctx, 100)
 			_, pc.top, pc.bottom = reaper.ImGui_DragInt2(ctx, "top/bottom", pc.top, pc.bottom, 1, 0, 100)
 			_, pc.left, pc.right = reaper.ImGui_DragInt2(ctx, "left/right", pc.left, pc.right, 1, 0, 50)
@@ -320,60 +313,62 @@ function controller_view()
 				end
 			end
 		elseif p.mode == 1 then -- Gradient
+			local g = p.gradient
 			reaper.ImGui_SameLine(ctx)
 			_, p.width, p.height = reaper.ImGui_DragInt2(ctx, "Width x Height", p.width, p.height, 25, 2000)
-			_, p.color1 = ImGui.ColorEdit4(ctx, "Color 1", p.color1, ImGui.ColorEditFlags_NoInputs())
+			_, g.color1 = ImGui.ColorEdit4(ctx, "Color 1", g.color1, ImGui.ColorEditFlags_NoInputs())
 			reaper.ImGui_SameLine(ctx)
-			_, p.color2 = ImGui.ColorEdit4(ctx, "Color 2", p.color2, ImGui.ColorEditFlags_NoInputs())
-			local combo_items = "Conic\0Linear\0Radial\0"
-			_, p.gradient = ImGui.Combo(ctx, "Gradient type", p.gradient, combo_items)
+			_, g.color2 = ImGui.ColorEdit4(ctx, "Color 2", g.color2, ImGui.ColorEditFlags_NoInputs())
 
-			if p.gradient == 0 then -- conic
-				local pp = p.conic
-				if pp.x == nil then
-					pp.x = p.width / 2
-					pp.y = p.height / 2
+			local combo_items = "Conic\0Linear\0Radial\0"
+			_, g.mode = ImGui.Combo(ctx, "Gradient type", g.mode, combo_items)
+
+			if g.mode == 0 then -- conic
+				local c = p.conic
+				if c.x == nil then
+					c.x = p.width / 2
+					c.y = p.height / 2
 				end
-				_, pp.x = reaper.ImGui_DragInt(ctx, "x", pp.x, 1, 0, p.width - 1)
-				_, pp.y = reaper.ImGui_DragInt(ctx, "y", pp.y, 1, 0, p.height - 1)
-				_, pp.angle = reaper.ImGui_DragDouble(ctx, "angle (rad)", pp.angle, 1, 0, math.pi)
-			elseif p.gradient == 1 then -- linear
-				local pp = p.linear
+				_, c.x = reaper.ImGui_DragInt(ctx, "x", c.x, 1, 0, p.width - 1)
+				_, c.y = reaper.ImGui_DragInt(ctx, "y", c.y, 1, 0, p.height - 1)
+				_, c.angle = reaper.ImGui_DragDouble(ctx, "angle (rad)", c.angle, 1, 0, math.pi)
+			elseif g.mode == 1 then -- linear
+				local l = p.linear
 				reaper.ImGui_SameLine(ctx)
 
 				local linear_items = "Horizontal\0Mix\0Vertical\0"
-				_, pp.mode = ImGui.Combo(ctx, "Mode", pp.mode, linear_items)
+				_, l.mode = ImGui.Combo(ctx, "Mode", l.mode, linear_items)
 
-				if pp.mode == 0 then -- horizontal
-					if pp.h.x1 == nil then
-						pp.h.x1, pp.h.x2 = 0, p.width - 1
+				if l.mode == 0 then -- horizontal
+					if l.h.x1 == nil then
+						l.h.x1, l.h.x2 = 0, p.width - 1
 					end
-					_, pp.h.x1, pp.h.x2 = reaper.ImGui_DragInt2(ctx, "X begin/end", pp.h.x1, pp.h.x2, 1) --, 0, p.width - 1)
-				elseif pp.mode == 1 then -- mix
-					if pp.mix.x1 == nil then
-						pp.mix.x1, pp.mix.x2 = 0, p.width - 1
-						pp.v.x1, pp.v.x2 = 0, p.height - 1
+					_, l.h.x1, l.h.x2 = reaper.ImGui_DragInt2(ctx, "X begin/end", l.h.x1, l.h.x2, 1) --, 0, p.width - 1)
+				elseif l.mode == 1 then -- mix
+					if l.mix.x1 == nil then
+						l.mix.x1, l.mix.x2 = 0, p.width - 1
+						l.v.x1, l.v.x2 = 0, p.height - 1
 					end
-					_, pp.mix.x1, pp.mix.x2 = reaper.ImGui_DragInt2(ctx, "X begin/end", pp.mix.x1, pp.mix.x2, 1) --, 0, p.width - 1)
+					_, l.mix.x1, l.mix.x2 = reaper.ImGui_DragInt2(ctx, "X begin/end", l.mix.x1, l.mix.x2, 1) --, 0, p.width - 1)
 					reaper.ImGui_SameLine(ctx)
-					_, pp.mix.y1, pp.mix.y2 = reaper.ImGui_DragInt2(ctx, "Y begin/end", pp.mix.y1, pp.mix.y2, 1) --, 0, p.height - 1)
+					_, l.mix.y1, l.mix.y2 = reaper.ImGui_DragInt2(ctx, "Y begin/end", l.mix.y1, l.mix.y2, 1) --, 0, p.height - 1)
 				else -- vertical
-					if pp.v.y1 == nil then
-						pp.v.y1, pp.v.y2 = 0, p.height - 1
+					if l.v.y1 == nil then
+						l.v.y1, l.v.y2 = 0, p.height - 1
 					end
-					_, pp.v.y1, pp.v.y2 = reaper.ImGui_DragInt2(ctx, "Y begin/end", pp.v.y1, pp.v.y2, 1) --, 0, p.height - 1)
+					_, l.v.y1, l.v.y2 = reaper.ImGui_DragInt2(ctx, "Y begin/end", l.v.y1, l.v.y2, 1) --, 0, p.height - 1)
 				end
 			else -- radial
-				local pp = p.radial
-				if pp.x == nil then
-					pp.x = p.width / 2
-					pp.y = p.height / 2
-					pp.radius = math.min(p.height, p.width) / 2
+				local r = p.radial
+				if r.x == nil then
+					r.x = p.width / 2
+					r.y = p.height / 2
+					r.radius = math.min(p.height, p.width) / 2
 				end
-				_, pp.x = reaper.ImGui_DragInt(ctx, "x", pp.x, 1, 0, p.width - 1)
-				_, pp.y = reaper.ImGui_DragInt(ctx, "y", pp.y, 1, 0, p.height - 1)
+				_, r.x = reaper.ImGui_DragInt(ctx, "x", r.x, 1, 0, p.width - 1)
+				_, r.y = reaper.ImGui_DragInt(ctx, "y", r.y, 1, 0, p.height - 1)
 				-- local rad_max = math.max(p.height, p.width)/2
-				_, pp.radius = reaper.ImGui_DragInt(ctx, "radius", pp.radius, 1) -- , 0, rad_max)
+				_, r.radius = reaper.ImGui_DragInt(ctx, "radius", r.radius, 1) -- , 0, rad_max)
 			end
 			if reaper.ImGui_Button(ctx, "Save background...") then
 				local rv, path = reaper.JS_Dialog_BrowseForSaveFile(
