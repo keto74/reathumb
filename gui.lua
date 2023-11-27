@@ -267,27 +267,38 @@ function ThumbnailPath(dir, prefix, fxname, suffix)
 	return string.format("%s/%s%s%s.png", dir, prefix, fxname, suffix)
 end
 
+function BeginDisabled(v)
+	if v then
+		reaper.ImGui_BeginDisabled(ctx)
+	end
+end
+function EndDisabled(v)
+	if v then
+		reaper.ImGui_EndDisabled(ctx)
+	end
+end
+
 function controller_view()
 	function crop_control()
 		local pc = params.cropping
 		_, pc.do_crop = reaper.ImGui_Checkbox(ctx, "Crop window borders", pc.do_crop)
-		if pc.do_crop then
-			if ImGui.TreeNode(ctx, "Cropping parameters") then
-				--_, params.cropping.left = reaper.ImGui_SliderInt(ctx, "left", params.cropping.left, 0, 50)
-				reaper.ImGui_PushItemWidth(ctx, 100)
-				_, pc.top, pc.bottom = reaper.ImGui_DragInt2(ctx, "top/bottom", pc.top, pc.bottom, 1, 0, 100)
-				_, pc.left, pc.right = reaper.ImGui_DragInt2(ctx, "left/right", pc.left, pc.right, 1, 0, 50)
-				if reaper.ImGui_Button(ctx, "Reset") then
-					params.cropping = {
-						left = 10,
-						right = 10,
-						top = 60,
-						bottom = 10,
-					}
-				end
-				ImGui.TreePop(ctx)
+		BeginDisabled(not pc.do_crop)
+		if ImGui.TreeNode(ctx, "Cropping parameters") then
+			--_, params.cropping.left = reaper.ImGui_SliderInt(ctx, "left", params.cropping.left, 0, 50)
+			reaper.ImGui_PushItemWidth(ctx, 100)
+			_, pc.top, pc.bottom = reaper.ImGui_DragInt2(ctx, "top/bottom", pc.top, pc.bottom, 1, 0, 100)
+			_, pc.left, pc.right = reaper.ImGui_DragInt2(ctx, "left/right", pc.left, pc.right, 1, 0, 50)
+			if reaper.ImGui_Button(ctx, "Reset") then
+				params.cropping = {
+					left = 10,
+					right = 10,
+					top = 60,
+					bottom = 10,
+				}
 			end
+			ImGui.TreePop(ctx)
 		end
+		EndDisabled(not pc.do_crop)
 	end
 	function background_control(p)
 		local combo_items = "Color\0Gradient\0Image\0"
@@ -389,103 +400,100 @@ function controller_view()
 	end
 	function raw_control()
 		_, params.raw.do_raw = reaper.ImGui_Checkbox(ctx, "Raw image", params.raw.do_raw)
-		if params.raw.do_raw then
-			if ImGui.TreeNode(ctx, "Raw image parameters") then
-				reaper.ImGui_Text(ctx, params.raw.destination)
-				if reaper.ImGui_Button(ctx, "Destination...") then
-					rv, folder = reaper.JS_Dialog_BrowseForFolder("Raw image destination", params.raw.destination)
-					if rv ~= 0 then
-						params.raw.destination = folder
-					end
+		BeginDisabled(not params.raw.do_raw)
+		if ImGui.TreeNode(ctx, "Raw image parameters") then
+			reaper.ImGui_Text(ctx, params.raw.destination)
+			if reaper.ImGui_Button(ctx, "Destination...") then
+				rv, folder = reaper.JS_Dialog_BrowseForFolder("Raw image destination", params.raw.destination)
+				if rv ~= 0 then
+					params.raw.destination = folder
 				end
-				--reaper.ImGui_SameLine(ctx)
-				--reaper.ImGui_Text(ctx, params.raw.destination)
-				ImGui.TreePop(ctx)
 			end
+			--reaper.ImGui_SameLine(ctx)
+			--reaper.ImGui_Text(ctx, params.raw.destination)
+			ImGui.TreePop(ctx)
 		end
+		EndDisabled(not params.raw.do_raw)
 	end
 	function thumbnail_control()
 		local tb = params.thumbnail
 		_, tb.do_thumbnail = reaper.ImGui_Checkbox(ctx, "Thumbnail", tb.do_thumbnail)
-		if tb.do_thumbnail then
-			if ImGui.TreeNode(ctx, "Thumbnail parameters") then
-				reaper.ImGui_Text(ctx, tb.destination)
+		BeginDisabled(not tb.do_thumbnail)
+		if ImGui.TreeNode(ctx, "Thumbnail parameters") then
+			reaper.ImGui_Text(ctx, tb.destination)
+			if reaper.ImGui_Button(ctx, "Destination...") then
+				rv, folder = reaper.JS_Dialog_BrowseForFolder("Thumbnails destination", tb.destination)
+				if rv ~= 0 then
+					tb.destination = folder
+				end
+			end
+			reaper.ImGui_PushItemWidth(ctx, 80)
+			_, tb.fname_prefix = ImGui.InputText(ctx, "Prefix", tb.fname_prefix)
+			reaper.ImGui_SameLine(ctx)
+			_, tb.fname_suffix = ImGui.InputText(ctx, "Suffix", tb.fname_suffix)
+			reaper.ImGui_PopItemWidth(ctx)
+			background_control(tb.background)
+			ImGui.TreePop(ctx)
+		end
+		EndDisabled(not tb.do_thumbnail)
+	end
+	function toolbar_maker_control()
+		local tb = params.toolbar_maker
+		_, tb.do_toolbar = reaper.ImGui_Checkbox(ctx, "Create toolbar", tb.do_toolbar)
+		BeginDisabled(not tb.do_toolbar)
+		--if ImGui.TreeNode(ctx, "Toolbar creator parameters") then
+		-- Combo
+		local preview_value = items_tb[tb.toolbar]
+		if ImGui.BeginCombo(ctx, "Toolbar", preview_value) then
+			for i, v in ipairs(items_tb) do
+				local is_selected = tb.toolbar == i
+				if ImGui.Selectable(ctx, items_tb[i], is_selected) then
+					tb.toolbar = i
+				end
+
+				-- Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+				if is_selected then
+					ImGui.SetItemDefaultFocus(ctx)
+				end
+			end
+			ImGui.EndCombo(ctx)
+		end
+		-- End of combo
+		if floating_keys[tb.toolbar] ~= nil then
+			reaper.ImGui_SameLine(ctx)
+			_, tb.overwrite = reaper.ImGui_Checkbox(ctx, "Overwrite", tb.overwrite)
+		end
+		_, tb.title = ImGui.InputText(ctx, "Title", tb.title)
+		--     ImGui.TreePop(ctx)
+		--end
+		EndDisabled(not tb.do_toolbar)
+	end
+	function thumbnail_toolbar_control()
+		local tb = params.toolbar_thumbnail
+		_, tb.do_thumbnail = reaper.ImGui_Checkbox(ctx, "Toolbar thumbnail", tb.do_thumbnail)
+		BeginDisabled(not tb.do_thumbnail)
+		if ImGui.TreeNode(ctx, "Toolbar thumbnail parameters") then
+			reaper.ImGui_Text(ctx, tb.destination)
+			_, tb.default_destination =
+				reaper.ImGui_Checkbox(ctx, "Reaper toolbar icons folder", tb.default_destination)
+			if not tb.default_destination then
 				if reaper.ImGui_Button(ctx, "Destination...") then
 					rv, folder = reaper.JS_Dialog_BrowseForFolder("Thumbnails destination", tb.destination)
 					if rv ~= 0 then
 						tb.destination = folder
 					end
 				end
-				reaper.ImGui_PushItemWidth(ctx, 80)
-				_, tb.fname_prefix = ImGui.InputText(ctx, "Prefix", tb.fname_prefix)
-				reaper.ImGui_SameLine(ctx)
-				_, tb.fname_suffix = ImGui.InputText(ctx, "Suffix", tb.fname_suffix)
-				reaper.ImGui_PopItemWidth(ctx)
-				background_control(tb.background)
-				ImGui.TreePop(ctx)
 			end
+			background_control(tb.background)
+			_, tb.color_hover = ImGui.ColorEdit4(ctx, "Hover overlay", tb.color_hover, ImGui.ColorEditFlags_NoInputs())
+			reaper.ImGui_SameLine(ctx)
+			_, tb.color_click = ImGui.ColorEdit4(ctx, "Click overlay", tb.color_click, ImGui.ColorEditFlags_NoInputs())
+			_, tb.fname_prefix = ImGui.InputText(ctx, "Filename(s) prefix", tb.fname_prefix)
+			_, tb.fname_suffix = ImGui.InputText(ctx, "Filename(s) suffix", tb.fname_suffix)
+			toolbar_maker_control()
+			ImGui.TreePop(ctx)
 		end
-	end
-	function toolbar_maker_control()
-		local tb = params.toolbar_maker
-		_, tb.do_toolbar = reaper.ImGui_Checkbox(ctx, "Create toolbar", tb.do_toolbar)
-		if tb.do_toolbar then
-			--if ImGui.TreeNode(ctx, "Toolbar creator parameters") then
-			-- Combo
-			local preview_value = items_tb[tb.toolbar]
-			if ImGui.BeginCombo(ctx, "Toolbar", preview_value) then
-				for i, v in ipairs(items_tb) do
-					local is_selected = tb.toolbar == i
-					if ImGui.Selectable(ctx, items_tb[i], is_selected) then
-						tb.toolbar = i
-					end
-
-					-- Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-					if is_selected then
-						ImGui.SetItemDefaultFocus(ctx)
-					end
-				end
-				ImGui.EndCombo(ctx)
-			end
-			-- End of combo
-			if floating_keys[tb.toolbar] ~= nil then
-				reaper.ImGui_SameLine(ctx)
-				_, tb.overwrite = reaper.ImGui_Checkbox(ctx, "Overwrite", tb.overwrite)
-			end
-			_, tb.title = ImGui.InputText(ctx, "Title", tb.title)
-			--     ImGui.TreePop(ctx)
-			--end
-		end
-	end
-	function thumbnail_toolbar_control()
-		local tb = params.toolbar_thumbnail
-		_, tb.do_thumbnail = reaper.ImGui_Checkbox(ctx, "Toolbar thumbnail", tb.do_thumbnail)
-		if tb.do_thumbnail then
-			--               if reaper.ImGui_CollapsingHeader(ctx, "Toolbar creator") then
-			if ImGui.TreeNode(ctx, "Toolbar thumbnail parameters") then
-				reaper.ImGui_Text(ctx, tb.destination)
-				_, tb.default_destination = reaper.ImGui_Checkbox(ctx, "Reaper toolbar icons folder", tb.default_destination)
-				if not tb.default_destination then
-					if reaper.ImGui_Button(ctx, "Destination...") then
-						rv, folder = reaper.JS_Dialog_BrowseForFolder("Thumbnails destination", tb.destination)
-						if rv ~= 0 then
-							tb.destination = folder
-						end
-					end
-				end
-				background_control(tb.background)
-				_, tb.color_hover =
-					ImGui.ColorEdit4(ctx, "Hover overlay", tb.color_hover, ImGui.ColorEditFlags_NoInputs())
-				reaper.ImGui_SameLine(ctx)
-				_, tb.color_click =
-					ImGui.ColorEdit4(ctx, "Click overlay", tb.color_click, ImGui.ColorEditFlags_NoInputs())
-				_, tb.fname_prefix = ImGui.InputText(ctx, "Filename(s) prefix", tb.fname_prefix)
-				_, tb.fname_suffix = ImGui.InputText(ctx, "Filename(s) suffix", tb.fname_suffix)
-				toolbar_maker_control()
-				ImGui.TreePop(ctx)
-			end
-			--               end
-		end
+		EndDisabled(not tb.do_thumbnail)
 	end
 	function preview_image(title, p)
 		if p.path ~= nil then
@@ -531,8 +539,8 @@ function controller_view()
 						p.state = 2
 					end
 				end
-				if reaper.ImGui_Button(ctx, 'Close') then
-				  reaper.ImGui_CloseCurrentPopup(ctx)
+				if reaper.ImGui_Button(ctx, "Close") then
+					reaper.ImGui_CloseCurrentPopup(ctx)
 				end
 				reaper.ImGui_EndPopup(ctx)
 			end
@@ -543,8 +551,8 @@ function controller_view()
 				reaper.ImGui_Image(ctx, bitmap, w, h, 0, 0, w, h/3)
 				reaper.ImGui_EndPopup(ctx)
 			end
-			]]--
-			
+			]]
+			--
 		end
 	end
 	if ImGui.BeginChild(ctx, "ChildR", ImGui.GetContentRegionAvail(ctx), ImGui.GetWindowHeight(ctx), false, nil) then
@@ -557,14 +565,14 @@ function controller_view()
 		raw_control()
 		thumbnail_control()
 		thumbnail_toolbar_control()
-		
+
 		--toolbar_maker_control()
 		ImGui.PopItemWidth(ctx)
 		-- screenshot button
 		if reaper.ImGui_Button(ctx, "Screenshot") then
 			START_SCREENSHOT = true
 		end
-		
+
 		preview_image("Preview screenshot", params.raw.preview)
 		preview_image("Preview thumbnail", params.thumbnail.preview)
 		preview_toolbar_image("Preview toolbar thumbnail", params.toolbar_thumbnail.preview)
@@ -637,7 +645,6 @@ function CreateToolbar()
 	OverwriteReaperMenu(toolbars)
 end
 
-
 function GetProcessingFunction()
 	return function(screenshot, fxname)
 		local cropped = CreateCrop(screenshot, P.cropping.left, P.cropping.right, P.cropping.top, P.cropping.bottom)
@@ -647,34 +654,34 @@ function GetProcessingFunction()
 			--msg(img_path)
 			RAW_PATH = img_path
 		end
-	
+
 		-- Thumbnail
 		if P.thumbnail.do_thumbnail then
 			local p = P.thumbnail
 			local background = CreateCopy(T_BACKGROUND)
 			ScaledOverlay(background, cropped)
-		
+
 			local img_path = ThumbnailPath(p.destination, p.fname_prefix, fxname, p.fname_suffix)
 			reaper.JS_LICE_WritePNG(img_path, background, false)
 			--msg(img_path)
-		
+
 			reaper.JS_LICE_DestroyBitmap(background)
 			T_PATH = img_path
 		end
-		
+
 		-- Toolbar thumbnail
 		if P.toolbar_thumbnail.do_thumbnail then
 			local p = P.toolbar_thumbnail
 			local background = CreateCopy(TBT_BACKGROUND)
-		
+
 			ScaledOverlay(background, cropped)
 			local tb_thumbnail = CreateToolbarThumbnail(background, RGBA2ARGB(p.color_hover), RGBA2ARGB(p.color_click))
-		
+
 			local img_path = ThumbnailPath(p.destination, p.fname_prefix, fxname, p.fname_suffix)
-		
+
 			reaper.JS_LICE_WritePNG(img_path, tb_thumbnail, false)
 			--msg(img_path)
-		
+
 			reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
 			reaper.JS_LICE_DestroyBitmap(background)
 			TBT_PATH = img_path
@@ -724,14 +731,14 @@ function Main()
 			if P.toolbar_thumbnail.do_thumbnail then
 				TBT_BACKGROUND = create_background(P.toolbar_thumbnail.background)
 			end
-			
+
 			PROCESS_NEXT_FX = true
 			INDEX = 1
 			CREATE = true
 			WAITING = false
 			PROCESS = GetProcessingFunction()
 			NEXT_ACTION = function()
-				WAITING = false 
+				WAITING = false
 				INDEX = INDEX + 1
 			end
 		end
@@ -746,7 +753,7 @@ function Main()
 				-- create toolbar when all icons have created to prevent issues after potential bugs/interruptions
 				if P.toolbar_maker.do_toolbar then
 					CreateToolbar()
-				end                    
+				end
 				-- resources deallocation
 				reaper.DeleteTrack(TRACK)
 				if P.thumbnail.do_thumbnail then
@@ -755,7 +762,7 @@ function Main()
 				if P.toolbar_thumbnail.do_thumbnail then
 					reaper.JS_LICE_DestroyBitmap(TBT_BACKGROUND)
 				end
-				
+
 				-- Setting up previews
 				if P.raw.do_raw then
 					params.raw.preview.path = RAW_PATH
@@ -774,14 +781,13 @@ function Main()
 			end
 		end
 		local fxname = SELECTED_PLUGS_TITLES[INDEX]
-		
+
 		if WAITING then
 			goto continue
 		end
 
 		WAITING = true
 		ScreenshotFX_WithProcess(TRACK, fxname, params.delay_s, PROCESS, true, NEXT_ACTION)
- 
 	end
 
 	::continue::
