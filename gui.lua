@@ -312,9 +312,9 @@ function controller_view()
 					reaper.JS_LICE_WritePNG(path, background, true)
 					reaper.JS_LICE_DestroyBitmap(background)
 				end
-				reaper.ImGui_OpenPopup(ctx, "test")
+				reaper.ImGui_OpenPopup(ctx, p.preview_name)
 				if reaper.ImGui_BeginPopupModal(ctx, "test") then
-					local bitmap = reaper.ImGui_CreateImage(p.preview)
+					local bitmap = reaper.ImGui_CreateImage(p.preview_name)
 					local w, h = reaper.ImGui_Image_GetSize(bitmap)
 					reaper.ImGui_Image(ctx, bitmap, w, h)
 					reaper.ImGui_EndPopup(ctx)
