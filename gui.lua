@@ -119,7 +119,7 @@ params.raw = {
 }
 
 params.thumbnail = {
-	do_thumbnail = false,
+	do_thumbnail = true,
 	destination = thispath .. "thumbnails",
 	background = deepcopy(default.background),
 	fname_prefix = "thumb_",
@@ -132,7 +132,7 @@ params.thumbnail = {
 params.thumbnail.background.preview_name = "background_thumbnail.png"
 
 params.toolbar_thumbnail = {
-	do_thumbnail = true,
+	do_thumbnail = false,
 	default_destination = true,
 	destination = thispath .. "toolbar_thumbnails",
 	background = deepcopy(default.background),
