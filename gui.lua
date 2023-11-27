@@ -40,6 +40,9 @@ local thispath = ({ reaper.get_action_context() })[2]:match("^.+[\\//]")
 dofile(thispath .. "misc.lua")
 dofile(thispath .. "plugin_icon.lua")
 
+local datapath = thispath .. "data/"
+reaper.RecursiveCreateDirectory(datapath, 0)
+
 -- Initial parsing
 local plugin_list = GetFxList()
 local toolbars, floating_keys = ParseReaperMenu()
@@ -126,6 +129,7 @@ params.thumbnail = {
 		path = nil,
 	},
 }
+params.thumbnail.background.preview_name = "background_thumbnail.png"
 
 params.toolbar_thumbnail = {
 	do_thumbnail = true,
@@ -140,12 +144,10 @@ params.toolbar_thumbnail = {
 		real_mode = true,
 		bitmap = nil,
 		path = nil,
-		path_normal = nil,
-		path_hovered = nil,
-		path_clicked = nil,
 		mousestate = 0,
 	},
 }
+params.toolbar_thumbnail.background.preview_name = "background_toolbar_thumbnail.png"
 
 local init_toolbar = 1
 for i = 1, 32 do
@@ -274,7 +276,10 @@ function EndDisabled(v)
 end
 
 try = {
-	x0 = 0, x1 = 1, y0 = 0, y1 = 1
+	x0 = 0,
+	x1 = 1,
+	y0 = 0,
+	y1 = 1,
 }
 function controller_view()
 	function crop_control()
@@ -298,6 +303,24 @@ function controller_view()
 		EndDisabled(not pc.do_crop)
 	end
 	function background_control(p)
+		function background_preview()
+			if reaper.ImGui_Button(ctx, "Preview...") then
+				if p.preview == nil then
+					local background = create_background(p)
+					local path = datapath .. p.preview_name
+					p.preview = path
+					reaper.JS_LICE_WritePNG(path, background, true)
+					reaper.JS_LICE_DestroyBitmap(background)
+				end
+				reaper.ImGui_OpenPopup(ctx, "test")
+				if reaper.ImGui_BeginPopupModal(ctx, "test") then
+					local bitmap = reaper.ImGui_CreateImage(p.preview)
+					local w, h = reaper.ImGui_Image_GetSize(bitmap)
+					reaper.ImGui_Image(ctx, bitmap, w, h)
+					reaper.ImGui_EndPopup(ctx)
+				end
+			end
+		end
 		local combo_items = "Color\0Gradient\0Image\0"
 		_, p.mode = ImGui.Combo(ctx, "Background", p.mode, combo_items)
 		if p.mode == 0 then -- Color
@@ -314,8 +337,11 @@ function controller_view()
 				if rv ~= 0 then
 					local background = create_background(p)
 					reaper.JS_LICE_WritePNG(path, background, false)
+					reaper.JS_LICE_DestroyBitmap(background)
+					p.preview = path
 				end
 			end
+			background_preview()
 		elseif p.mode == 1 then -- Gradient
 			local g = p.gradient
 			reaper.ImGui_SameLine(ctx)
@@ -386,6 +412,7 @@ function controller_view()
 					reaper.JS_LICE_WritePNG(path, bg, false)
 				end
 			end
+			background_preview()
 		else
 			if reaper.ImGui_Button(ctx, "File") then
 				local rv, file = reaper.GetUserFileNameForRead("", "Image", ".png")
@@ -519,13 +546,13 @@ function controller_view()
 			if reaper.ImGui_BeginPopup(ctx, title) then
 				local bitmap = reaper.ImGui_CreateImage(p.path)
 				local w, h = reaper.ImGui_Image_GetSize(bitmap)
-				if p.real_mode then  -- "realistic" toolbar thumbnail preview
+				if p.real_mode then -- "realistic" toolbar thumbnail preview
 					if p.mousestate == 0 then
-						reaper.ImGui_Image(ctx, bitmap, w/3, h, 0, 0, 1/3)
+						reaper.ImGui_Image(ctx, bitmap, w / 3, h, 0, 0, 1 / 3)
 					elseif p.mousestate == 1 then
-						reaper.ImGui_Image(ctx, bitmap, w/3, h, 1/3, 0, 2/3)
+						reaper.ImGui_Image(ctx, bitmap, w / 3, h, 1 / 3, 0, 2 / 3)
 					else
-						reaper.ImGui_Image(ctx, bitmap, w/3, h, 2/3, 0, 1)
+						reaper.ImGui_Image(ctx, bitmap, w / 3, h, 2 / 3, 0, 1)
 					end
 					p.mousestate = 0
 					if reaper.ImGui_IsItemHovered(ctx) then
@@ -534,7 +561,7 @@ function controller_view()
 					if reaper.ImGui_IsItemClicked(ctx) then
 						p.mousestate = 2
 					end
-				else  -- full image preview
+				else -- full image preview
 					reaper.ImGui_Image(ctx, bitmap, w, h)
 				end
 				reaper.ImGui_EndPopup(ctx)
@@ -743,6 +770,7 @@ function Main()
 				-- resources deallocation
 				reaper.DeleteTrack(TRACK)
 				if P.thumbnail.do_thumbnail then
+					reaper.ImGui_Image(ctx, bitmap, w / 3, h, 2 / 3, 0, 1)
 					reaper.JS_LICE_DestroyBitmap(T_BACKGROUND)
 				end
 				if P.toolbar_thumbnail.do_thumbnail then
@@ -757,12 +785,7 @@ function Main()
 					params.thumbnail.preview.path = T_PATH
 				end
 				if P.toolbar_thumbnail.do_thumbnail then
-					local p = params.toolbar_thumbnail.preview
-					p.path = TBT_PATH
-					p.path_original = thispath .. "toolbar_thumbnail_original.png"
-					p.path_hovered = thispath .. "toolbar_thumbnail_hovered.png"
-					p.path_clicked = thispath .. "toolbar_thumbnail_clicked.png"
-					ToolbarIconFileSplit(TBT_PATH, p.path_original, p.path_hovered, p.path_clicked)
+					params.toolbar_thumbnail.preview.path = TBT_PATH
 				end
 			end
 		end
