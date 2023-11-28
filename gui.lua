@@ -313,12 +313,12 @@ function controller_view()
 					reaper.JS_LICE_DestroyBitmap(background)
 				end
 				reaper.ImGui_OpenPopup(ctx, p.preview_name)
-				if reaper.ImGui_BeginPopupModal(ctx, "test") then
-					local bitmap = reaper.ImGui_CreateImage(p.preview_name)
-					local w, h = reaper.ImGui_Image_GetSize(bitmap)
-					reaper.ImGui_Image(ctx, bitmap, w, h)
-					reaper.ImGui_EndPopup(ctx)
-				end
+			end
+			if reaper.ImGui_BeginPopup(ctx, p.preview_name) then
+				local bitmap = reaper.ImGui_CreateImage(p.preview)
+				local w, h = reaper.ImGui_Image_GetSize(bitmap)
+				reaper.ImGui_Image(ctx, bitmap, w, h)
+				reaper.ImGui_EndPopup(ctx)
 			end
 		end
 		local combo_items = "Color\0Gradient\0Image\0"
