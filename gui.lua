@@ -522,23 +522,10 @@ function controller_view()
 		EndDisabled(not tb.do_thumbnail)
 	end
 	function preview_image(title, p)
-		-- if p.path ~= nil then
-		--      if reaper.ImGui_Button(ctx, title) then
-		--           reaper.ImGui_OpenPopup(ctx, title)
-		--      end
-		--      if reaper.ImGui_BeginPopup(ctx, title) then
-		--           local bitmap = reaper.ImGui_CreateImage(p.path)
-		--           local w, h = reaper.ImGui_Image_GetSize(bitmap)
-		--           reaper.ImGui_Image(ctx, bitmap, w, h)
-		--           reaper.ImGui_EndPopup(ctx)
-		--      end
-		-- end
-
 		local disabled = not ImGui.ValidatePtr(p.bitmap, "ImGui_Image*")
 		BeginDisabled(disabled)
 		if reaper.ImGui_Button(ctx, title) then
 			reaper.ImGui_OpenPopup(ctx, title)
-			-- p.bitmap = reaper.ImGui_CreateImage(p.pth)
 		end
 		EndDisabled(disabled)
 
@@ -549,39 +536,6 @@ function controller_view()
 		end
 	end
 	function preview_toolbar_image(title, p)
-		--[[
-		if p.path ~= nil then
-			if reaper.ImGui_Button(ctx, title) then
-				reaper.ImGui_OpenPopup(ctx, title)
-			end
-			reaper.ImGui_SameLine(ctx)
-			_, p.real_mode = reaper.ImGui_Checkbox(ctx, "Realistic mode", p.real_mode)
-
-			if reaper.ImGui_BeginPopup(ctx, title) then
-				local bitmap = reaper.ImGui_CreateImage(p.path)
-				local w, h = reaper.ImGui_Image_GetSize(bitmap)
-				if p.real_mode then -- "realistic" toolbar thumbnail preview
-					if p.mousestate == 0 then
-						reaper.ImGui_Image(ctx, bitmap, w / 3, h, 0, 0, 1 / 3)
-					elseif p.mousestate == 1 then
-						reaper.ImGui_Image(ctx, bitmap, w / 3, h, 1 / 3, 0, 2 / 3)
-					else
-						reaper.ImGui_Image(ctx, bitmap, w / 3, h, 2 / 3, 0, 1)
-					end
-					p.mousestate = 0
-					if reaper.ImGui_IsItemHovered(ctx) then
-						p.mousestate = 1
-					end
-					if reaper.ImGui_IsItemClicked(ctx) then
-						p.mousestate = 2
-					end
-				else -- full image preview
-					reaper.ImGui_Image(ctx, bitmap, w, h)
-				end
-				reaper.ImGui_EndPopup(ctx)
-			end
-		end
-		]]--
 		local disabled = not ImGui.ValidatePtr(p.bitmap, "ImGui_Image*")
 		BeginDisabled(disabled)
 		if reaper.ImGui_Button(ctx, title) then
@@ -766,16 +720,28 @@ function Ending()
 
 	-- Setting up previews
 	if P.raw.do_raw then
-		-- params.raw.preview.path = RAW_PATH
-		params.raw.preview.bitmap = reaper.ImGui_CreateImage(RAW_PATH)
+		local p = params.raw.preview
+		if ImGui.ValidatePtr(p.bitmap, "ImGui_Image*") then
+      reaper.ImGui_Detach(ctx, p.bitmap)
+		end
+		p.bitmap = reaper.ImGui_CreateImage(RAW_PATH)
+		reaper.ImGui_Attach(ctx, p.bitmap)
 	end
 	if P.thumbnail.do_thumbnail then
-		-- params.thumbnail.preview.path = T_PATH
-		params.thumbnail.preview.bitmap = reaper.ImGui_CreateImage(T_PATH)
+		local p = params.thumbnail.preview
+		if ImGui.ValidatePtr(p.bitmap, "ImGui_Image*") then
+      reaper.ImGui_Detach(ctx, p.bitmap)
+		end
+		p.bitmap = reaper.ImGui_CreateImage(T_PATH)
+		reaper.ImGui_Attach(ctx, p.bitmap)
 	end
 	if P.toolbar_thumbnail.do_thumbnail then
-		-- params.toolbar_thumbnail.preview.path = TBT_PATH
-		params.toolbar_thumbnail.preview.bitmap = reaper.ImGui_CreateImage(TBT_PATH)
+		local p = params.toolbar_thumbnail.preview
+		if ImGui.ValidatePtr(p.bitmap, "ImGui_Image*") then
+      reaper.ImGui_Detach(ctx, p.bitmap)
+		end
+		p.bitmap = reaper.ImGui_CreateImage(TBT_PATH)
+		reaper.ImGui_Attach(ctx, p.bitmap)
 	end
 end
 
