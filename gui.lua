@@ -522,23 +522,37 @@ function controller_view()
 		EndDisabled(not tb.do_thumbnail)
 	end
 	function preview_image(title, p)
-		if p.path ~= nil then
-			if reaper.ImGui_Button(ctx, title) then
-				reaper.ImGui_OpenPopup(ctx, title)
-			end
-			if reaper.ImGui_BeginPopup(ctx, title) then
-				local bitmap = reaper.ImGui_CreateImage(p.path)
-				local w, h = reaper.ImGui_Image_GetSize(bitmap)
-				reaper.ImGui_Image(ctx, bitmap, w, h)
-				reaper.ImGui_EndPopup(ctx)
-			end
+		-- if p.path ~= nil then
+		--      if reaper.ImGui_Button(ctx, title) then
+		--           reaper.ImGui_OpenPopup(ctx, title)
+		--      end
+		--      if reaper.ImGui_BeginPopup(ctx, title) then
+		--           local bitmap = reaper.ImGui_CreateImage(p.path)
+		--           local w, h = reaper.ImGui_Image_GetSize(bitmap)
+		--           reaper.ImGui_Image(ctx, bitmap, w, h)
+		--           reaper.ImGui_EndPopup(ctx)
+		--      end
+		-- end
+
+		local disabled = not ImGui.ValidatePtr(p.bitmap, "ImGui_Image*")
+		BeginDisabled(disabled)
+		if reaper.ImGui_Button(ctx, title) then
+			reaper.ImGui_OpenPopup(ctx, title)
+			-- p.bitmap = reaper.ImGui_CreateImage(p.pth)
+		end
+		EndDisabled(disabled)
+
+		if reaper.ImGui_BeginPopup(ctx, title) then
+			local w, h = reaper.ImGui_Image_GetSize(p.bitmap)
+			reaper.ImGui_Image(ctx, p.bitmap, w, h)
+			reaper.ImGui_EndPopup(ctx)
 		end
 	end
 	function preview_toolbar_image(title, p)
+		--[[
 		if p.path ~= nil then
-			local open
 			if reaper.ImGui_Button(ctx, title) then
-				open = reaper.ImGui_OpenPopup(ctx, title)
+				reaper.ImGui_OpenPopup(ctx, title)
 			end
 			reaper.ImGui_SameLine(ctx)
 			_, p.real_mode = reaper.ImGui_Checkbox(ctx, "Realistic mode", p.real_mode)
@@ -566,6 +580,38 @@ function controller_view()
 				end
 				reaper.ImGui_EndPopup(ctx)
 			end
+		end
+		]]--
+		local disabled = not ImGui.ValidatePtr(p.bitmap, "ImGui_Image*")
+		BeginDisabled(disabled)
+		if reaper.ImGui_Button(ctx, title) then
+			reaper.ImGui_OpenPopup(ctx, title)
+		end
+		reaper.ImGui_SameLine(ctx)
+		_, p.real_mode = reaper.ImGui_Checkbox(ctx, "Realistic mode", p.real_mode)
+		EndDisabled(disabled)
+		
+		if reaper.ImGui_BeginPopup(ctx, title) then
+			local w, h = reaper.ImGui_Image_GetSize(p.bitmap)
+			if p.real_mode then -- "realistic" toolbar thumbnail preview
+				if p.mousestate == 0 then
+					reaper.ImGui_Image(ctx, p.bitmap, w / 3, h, 0, 0, 1 / 3)
+				elseif p.mousestate == 1 then
+					reaper.ImGui_Image(ctx, p.bitmap, w / 3, h, 1 / 3, 0, 2 / 3)
+				else
+					reaper.ImGui_Image(ctx, p.bitmap, w / 3, h, 2 / 3, 0, 1)
+				end
+				p.mousestate = 0
+				if reaper.ImGui_IsItemHovered(ctx) then
+					p.mousestate = 1
+				end
+				if reaper.ImGui_IsItemClicked(ctx) then
+					p.mousestate = 2
+				end
+			else -- full image preview
+				reaper.ImGui_Image(ctx, p.bitmap, w, h)
+			end
+			reaper.ImGui_EndPopup(ctx)
 		end
 	end
 	if ImGui.BeginChild(ctx, "ChildR", ImGui.GetContentRegionAvail(ctx), ImGui.GetWindowHeight(ctx), false, nil) then
@@ -648,7 +694,6 @@ function CreateToolbar()
 		-- icons are 0 indexed, string index is for allowing text icons
 		local tt = params.toolbar_thumbnail
 		toolbar.icons[tostring(idx - 1)] = ThumbnailPath(path_toolbar_icons, tt.fname_prefix, fx.title, tt.fname_suffix)
-		--string.format("%s/%s%s%s.png", path_toolbar_icons, tt.fname_prefix, fx.title, tt.fname_suffix)
 	end
 	local section = "Floating toolbar " .. tonumber(tbm.toolbar)
 	toolbars[section] = toolbar
@@ -664,7 +709,6 @@ function GetProcessingFunction()
 		if P.raw.do_raw then
 			local img_path = ThumbnailPath(P.raw.destination, "", fxname, "")
 			reaper.JS_LICE_WritePNG(img_path, cropped, false)
-			--msg(img_path)
 			RAW_PATH = img_path
 		end
 
@@ -676,7 +720,6 @@ function GetProcessingFunction()
 
 			local img_path = ThumbnailPath(p.destination, p.fname_prefix, fxname, p.fname_suffix)
 			reaper.JS_LICE_WritePNG(img_path, background, false)
-			--msg(img_path)
 
 			reaper.JS_LICE_DestroyBitmap(background)
 			T_PATH = img_path
@@ -693,12 +736,46 @@ function GetProcessingFunction()
 			local img_path = ThumbnailPath(p.destination, p.fname_prefix, fxname, p.fname_suffix)
 
 			reaper.JS_LICE_WritePNG(img_path, tb_thumbnail, false)
-			--msg(img_path)
 
 			reaper.JS_LICE_DestroyBitmap(tb_thumbnail)
 			reaper.JS_LICE_DestroyBitmap(background)
 			TBT_PATH = img_path
 		end
+	end
+end
+
+function Iteration()
+	WAITING = false
+	INDEX = INDEX + 1
+end
+
+function Ending()
+	WAITING = false
+	-- create toolbar when all icons have created to prevent issues after potential bugs/interruptions
+	if P.toolbar_maker.do_toolbar then
+		CreateToolbar()
+	end
+	-- resources deallocation
+	reaper.DeleteTrack(TRACK)
+	if P.thumbnail.do_thumbnail then
+		reaper.JS_LICE_DestroyBitmap(T_BACKGROUND)
+	end
+	if P.toolbar_thumbnail.do_thumbnail then
+		reaper.JS_LICE_DestroyBitmap(TBT_BACKGROUND)
+	end
+
+	-- Setting up previews
+	if P.raw.do_raw then
+		-- params.raw.preview.path = RAW_PATH
+		params.raw.preview.bitmap = reaper.ImGui_CreateImage(RAW_PATH)
+	end
+	if P.thumbnail.do_thumbnail then
+		-- params.thumbnail.preview.path = T_PATH
+		params.thumbnail.preview.bitmap = reaper.ImGui_CreateImage(T_PATH)
+	end
+	if P.toolbar_thumbnail.do_thumbnail then
+		-- params.toolbar_thumbnail.preview.path = TBT_PATH
+		params.toolbar_thumbnail.preview.bitmap = reaper.ImGui_CreateImage(TBT_PATH)
 	end
 end
 
@@ -750,10 +827,7 @@ function Main()
 			CREATE = true
 			WAITING = false
 			PROCESS = GetProcessingFunction()
-			NEXT_ACTION = function()
-				WAITING = false
-				INDEX = INDEX + 1
-			end
+			NEXT_ACTION = Iteration
 		end
 	end
 
@@ -761,33 +835,7 @@ function Main()
 		if INDEX == #SELECTED_PLUGS then
 			------- ENDING CODE HERE --------
 			PROCESS_NEXT_FX = false
-			NEXT_ACTION = function()
-				WAITING = false
-				-- create toolbar when all icons have created to prevent issues after potential bugs/interruptions
-				if P.toolbar_maker.do_toolbar then
-					CreateToolbar()
-				end
-				-- resources deallocation
-				reaper.DeleteTrack(TRACK)
-				if P.thumbnail.do_thumbnail then
-					reaper.ImGui_Image(ctx, bitmap, w / 3, h, 2 / 3, 0, 1)
-					reaper.JS_LICE_DestroyBitmap(T_BACKGROUND)
-				end
-				if P.toolbar_thumbnail.do_thumbnail then
-					reaper.JS_LICE_DestroyBitmap(TBT_BACKGROUND)
-				end
-
-				-- Setting up previews
-				if P.raw.do_raw then
-					params.raw.preview.path = RAW_PATH
-				end
-				if P.thumbnail.do_thumbnail then
-					params.thumbnail.preview.path = T_PATH
-				end
-				if P.toolbar_thumbnail.do_thumbnail then
-					params.toolbar_thumbnail.preview.path = TBT_PATH
-				end
-			end
+			NEXT_ACTION = Ending
 		end
 		local fxname = SELECTED_PLUGS_TITLES[INDEX]
 
