@@ -33,15 +33,23 @@ function GetFxList()
 	local all_fx = {}
 	for i = 2, #lines do
 		local line = lines[i]
-		-- avoiding issues for some weird naming, should be reported ideally
-		pcall(function()
-			local fname, title_extra = string.match(line, "([^=]+)=[^,]+,[^,]+,([^,]+)")
-			local title = string.match(title_extra, "([^)]+[)])")
-			all_fx[#all_fx + 1] = {
-				fname = fname,
-				title = title,
-			}
-		end)
+    if line == nil then
+      goto continue
+    end
+		local fname, title_extra = string.match(line, "([^=]+)=[^,]+,[^,]+,([^)]+%))")
+    if fname == nil or title_extra == nil then
+      goto continue
+    end
+    -- if title_extra ~= nil then
+    local title = string.match(title_extra, "([^)]+%))")
+    if title == nil then
+      msg(title_extra)
+    end
+    all_fx[#all_fx + 1] = {
+      fname = fname,
+      title = title,
+    }
+    ::continue::
 	end
 	return all_fx
 end

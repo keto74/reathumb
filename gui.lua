@@ -194,29 +194,43 @@ function plugin_list_view()
 		ImGui.Attach(ctx, params.filter)
 	end
 
+
+	--ImGui.PushItemWidth(ctx, 100)
+	local size = { 100, 30 }
+	local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+	local posX = (x - 2*size[1]) * 0.5
+	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
+	reaper.ImGui_SetCursorPos(ctx, posX, posY)
+
 	-- select all
-	if reaper.ImGui_Button(ctx, "All") then
+	if reaper.ImGui_Button(ctx, "All", size[1], size[2]) then
 		for i = 1, #params.sel_plug do
 			params.sel_plug[i] = true
 		end
 	end
 	reaper.ImGui_SameLine(ctx)
-	if reaper.ImGui_Button(ctx, "None") then
+	if reaper.ImGui_Button(ctx, "None", size[1], size[2]) then
 		for i = 1, #params.sel_plug do
 			params.sel_plug[i] = false
 		end
 	end
-	for i, sel in ipairs(params.sel_plug) do
-		if reaper.ImGui_Selectable(ctx, ("%d: %s"):format(i, plugin_list[i].title), sel) then
-			if not reaper.ImGui_IsKeyDown(ctx, reaper.ImGui_Mod_Ctrl()) then -- Clear selection when CTRL is not heldk
-				for j = 1, #params.sel_plug do
-					params.sel_plug[j] = false
+
+	--reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildRounding(), 5.0)
+	if reaper.ImGui_BeginChild(ctx, "ChildPluginList") then
+		for i, sel in ipairs(params.sel_plug) do
+			if reaper.ImGui_Selectable(ctx, ("%d: %s"):format(i, plugin_list[i].title), sel) then
+				if not reaper.ImGui_IsKeyDown(ctx, reaper.ImGui_Mod_Ctrl()) then -- Clear selection when CTRL is not heldk
+					for j = 1, #params.sel_plug do
+						params.sel_plug[j] = false
+					end
 				end
+				params.sel_plug[i] = not sel
 			end
-			params.sel_plug[i] = not sel
 		end
+		ImGui.EndChild(ctx)
+		reaper.ImGui_EndChild(ctx)
 	end
-	ImGui.EndChild(ctx)
+	--reaper.ImGui_PopStyleVar(ctx)
 end
 
 function create_background(p)
