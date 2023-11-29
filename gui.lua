@@ -208,6 +208,11 @@ function plugin_list_view()
 			params.sel_plug[i] = true
 		end
 	end
+	if ImGui.IsItemHovered(ctx) then
+		ImGui.SetTooltip(ctx, "Select all plugins")
+	end
+	
+	
 	reaper.ImGui_SameLine(ctx)
 	if reaper.ImGui_Button(ctx, "None", size[1], size[2]) then
 		for i = 1, #params.sel_plug do
@@ -279,19 +284,37 @@ end
 function controller_view()
 	function destination_control(p, title)
 		reaper.ImGui_SeparatorText(ctx, "Files parameters")
+		if ImGui.IsItemHovered(ctx) then
+			ImGui.SetTooltip(ctx, "Filenames and destination")
+		end
+		
 		--reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_FramePadding(), 10, 10)
-		if reaper.ImGui_BeginChild(ctx, title, 0, 60, true) then
-			if reaper.ImGui_Button(ctx, "Destination...") then
+		if reaper.ImGui_BeginChild(ctx, title, 0, 70, true) then
+			local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+			reaper.ImGui_PushItemWidth(ctx, x / 3)
+			
+			_, p.fname_prefix = ImGui.InputText(ctx, "Prefix", p.fname_prefix)
+			if ImGui.IsItemHovered(ctx) then
+				ImGui.SetTooltip(ctx, "Filename(s) prefix")
+			end
+			
+			reaper.ImGui_SameLine(ctx)
+			
+			_, p.fname_suffix = ImGui.InputText(ctx, "Suffix", p.fname_suffix)
+			if ImGui.IsItemHovered(ctx) then
+				ImGui.SetTooltip(ctx, "Filename(s) suffix (without extension)")
+			end
+
+			if reaper.ImGui_Button(ctx, "Destination...", 100, 30) then
 				rv, folder = reaper.JS_Dialog_BrowseForFolder(title, p.destination)
 				if rv ~= 0 then
 					p.destination = folder
 				end
 			end
-			local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
-			reaper.ImGui_PushItemWidth(ctx, x / 3)
-			_, p.fname_prefix = ImGui.InputText(ctx, "Prefix", p.fname_prefix)
-			reaper.ImGui_SameLine(ctx)
-			_, p.fname_suffix = ImGui.InputText(ctx, "Suffix", p.fname_suffix)
+			if ImGui.IsItemHovered(ctx) then
+				ImGui.SetTooltip(ctx, "Choose destination folder")
+			end
+			
 			reaper.ImGui_EndChild(ctx)
 		end
 		--reaper.ImGui_PopStyleVar(ctx)
@@ -309,6 +332,7 @@ function controller_view()
 			local pc = params.cropping
 	
 			_, pc.do_crop = reaper.ImGui_Checkbox(ctx, "Crop window borders", pc.do_crop)
+			
 			reaper.ImGui_BeginDisabled(ctx, not pc.do_crop)
 			--if ImGui.TreeNode(ctx, "Cropping parameters") then
 			--reaper.ImGui_PushItemWidth(ctx, 100)
@@ -322,6 +346,10 @@ function controller_view()
 			if reaper.ImGui_Button(ctx, "Reset", sizeX, sizeY) then
 				params.cropping = deepcopy(default.cropping)
 			end
+			if ImGui.IsItemHovered(ctx) then
+				ImGui.SetTooltip(ctx, "Reset cropping parameters to default values")
+			end
+			
 			reaper.ImGui_EndDisabled(ctx)
 	
 			reaper.ImGui_EndChild(ctx)
@@ -463,6 +491,10 @@ function controller_view()
 						end
 						reaper.ImGui_OpenPopup(ctx, p.preview_name)
 					end
+					if ImGui.IsItemHovered(ctx) then
+						ImGui.SetTooltip(ctx, "Open background preview popup")
+					end
+					
 					reaper.ImGui_SameLine(ctx)
 					if reaper.ImGui_Button(ctx, "Export", size[1], size[2]) then
 						local rv, path = reaper.JS_Dialog_BrowseForSaveFile(
@@ -476,6 +508,10 @@ function controller_view()
 							reaper.JS_LICE_WritePNG(path, bg, false)
 						end
 					end
+					if ImGui.IsItemHovered(ctx) then
+						ImGui.SetTooltip(ctx, "Export background to file for reuse")
+					end
+					
 					if reaper.ImGui_BeginPopup(ctx, p.preview_name) then
 						local bitmap = reaper.ImGui_CreateImage(p.preview)
 						local w, h = reaper.ImGui_Image_GetSize(bitmap)
@@ -483,14 +519,30 @@ function controller_view()
 						reaper.ImGui_EndPopup(ctx)
 					end
 				else
-					if reaper.ImGui_Button(ctx, "File") then
+					reaper.ImGui_BeginDisabled(ctx, true)
+					reaper.ImGui_Text(ctx, p.file)
+					reaper.ImGui_EndDisabled(ctx)
+
+					--ImGui.PushItemWidth(ctx, 100)
+					local size = { 100, 30 }
+					local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+					local posX = (x - size[1]) * 0.5
+					local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
+					reaper.ImGui_SetCursorPos(ctx, posX, posY)
+				
+					if reaper.ImGui_Button(ctx, "File", size[1], size[2]) then
 						local rv, file = reaper.GetUserFileNameForRead("", "Image", ".png")
 						if rv ~= 0 then
 							p.file = file
 						end
 					end
-					reaper.ImGui_SameLine(ctx)
-					reaper.ImGui_Text(ctx, p.file)
+					if ImGui.IsItemHovered(ctx) then
+						ImGui.SetTooltip(ctx, "Choose background location")
+					end
+					
+					--reaper.ImGui_SameLine(ctx)
+					
+					
 				end
 				reaper.ImGui_EndChild(ctx)
 			end
@@ -663,9 +715,11 @@ function controller_view()
 	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
 	reaper.ImGui_SetCursorPos(ctx, posX, posY)
 
+	reaper.ImGui_BeginDisabled(ctx, not  (params.raw.do_raw or params.thumbnail.do_thumbnail or params.toolbar_thumbnail.do_toolbar_thumbnail))
 	if reaper.ImGui_Button(ctx, "Screenshot", size[1], size[2]) then
 		START_SCREENSHOT = true
 	end
+	reaper.ImGui_EndDisabled(ctx)
 
 	reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildRounding(), 5.0)
 	reaper.ImGui_SeparatorText(ctx, "Screenshot parameters")
@@ -695,7 +749,7 @@ function controller_view()
 		
 		--reaper.ImGui_SeparatorText(ctx, "Original image")
 		if reaper.ImGui_CollapsingHeader(ctx, "Original image export") then
-			if ImGui.BeginChild(ctx, "ChildOriginal", 0, 125, true) then
+			if ImGui.BeginChild(ctx, "ChildOriginal", 0, 135, true) then
 				raw_control()
 				reaper.ImGui_EndChild(ctx)
 			end
@@ -703,13 +757,13 @@ function controller_view()
 		
 		--reaper.ImGui_SeparatorText(ctx, "Normal icon")
 		if reaper.ImGui_CollapsingHeader(ctx, "Simple icon export") then
-		if ImGui.BeginChild(ctx, "ChildNormal", 0, 330, true) then
+		if ImGui.BeginChild(ctx, "ChildNormal", 0, 340, true) then
 			thumbnail_control()
 			reaper.ImGui_EndChild(ctx)
 		end
 		end
 		if reaper.ImGui_CollapsingHeader(ctx, "Toolbar icon export") then
-			if ImGui.BeginChild(ctx, "ChilToolbarIcon", 0, 420, true) then
+			if ImGui.BeginChild(ctx, "ChilToolbarIcon", 0, 430, true) then
 				thumbnail_toolbar_control()
 				reaper.ImGui_EndChild(ctx)
 			end
