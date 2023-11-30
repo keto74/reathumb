@@ -239,6 +239,24 @@ function deepcopy(orig)
 	return copy
 end
 
+function deepeq(t1, t2)
+  local rec = function(x1, x2)
+    if type(x1) == "table" and type(x2) == "table" then
+      if #x1 ~= #x2 then
+        return false
+      else
+        for k, v in pairs(x1) do
+          if not deepeq(v, x2[k]) then
+            return false
+          end
+        end
+      end
+    else
+      return x1 ==  x2
+    end
+  end
+  return rec(t1, t2)
+end
 
 function any(t)
   for _, v in ipairs(t) do
