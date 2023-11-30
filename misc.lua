@@ -43,7 +43,7 @@ function GetFxList()
     -- if title_extra ~= nil then
     local title = string.match(title_extra, "([^)]+%))")
     if title == nil then
-      msg(title_extra)
+      goto continue
     end
     all_fx[#all_fx + 1] = {
       fname = fname,
@@ -238,3 +238,4 @@ function deepcopy(orig)
 	end
 	return copy
 end
+

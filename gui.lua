@@ -45,6 +45,10 @@ reaper.RecursiveCreateDirectory(datapath, 0)
 
 -- Initial parsing
 local plugin_list = GetFxList()
+for _, plug in ipairs(plugin_list) do
+	plug.key = string.lower(plug.title)
+end
+
 local toolbars, floating_keys = ParseReaperMenu()
 local fxopts = ParseReaperFxOptions()
 
@@ -99,13 +103,13 @@ local default = {
 		},
 	},
 }
-
 -- params
 local params = {}
 params.sel_plug = {}
 for _ = 1, #plugin_list do
 	params.sel_plug[#params.sel_plug + 1] = false
 end
+params.filter = ""
 
 params.delay_s = 0.5
 params.cropping = deepcopy(default.cropping)
@@ -188,41 +192,48 @@ local path_toolbar_icons = reaper.GetResourcePath() .. "/Data/toolbar_icons/"
 ---
 
 function plugin_list_view()
-	if not params.filter then
-		params.filter = ImGui.CreateTextFilter()
-		-- prevent the filter object from being destroyed once unused for one or more frames
-		ImGui.Attach(ctx, params.filter)
-	end
-
-
-	--ImGui.PushItemWidth(ctx, 100)
+ --ImGui.PushItemWidth(ctx, 100)
 	local size = { 100, 30 }
 	local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
 	local posX = (x - 2*size[1]) * 0.5
 	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
 	reaper.ImGui_SetCursorPos(ctx, posX, posY)
 
-	-- select all
+	local filter = string.lower(params.filter)
+
+	-- select all visible
 	if reaper.ImGui_Button(ctx, "All", size[1], size[2]) then
 		for i = 1, #params.sel_plug do
-			params.sel_plug[i] = true
+			params.sel_plug[i] = params.sel_plug[i] or filter == "" or string.match(plugin_list[i].key, filter) ~= nil
 		end
 	end
 	if ImGui.IsItemHovered(ctx) then
-		ImGui.SetTooltip(ctx, "Select all plugins")
+		ImGui.SetTooltip(ctx, "Select all visible plugins")
 	end
 	
 	
 	reaper.ImGui_SameLine(ctx)
+	
+	-- deselect all visible
 	if reaper.ImGui_Button(ctx, "None", size[1], size[2]) then
 		for i = 1, #params.sel_plug do
-			params.sel_plug[i] = false
+				params.sel_plug[i] = params.sel_plug[i] and filter ~= "" and string.match(plugin_list[i].key, filter) == nil
 		end
 	end
+	if ImGui.IsItemHovered(ctx) then
+		ImGui.SetTooltip(ctx, "Unselect all visible plugins")
+	end
 
+	_, params.filter = reaper.ImGui_InputText(ctx, "Filter", params.filter, reaper.ImGui_InputTextFlags_EscapeClearsAll() |  reaper.ImGui_InputTextFlags_AutoSelectAll())
+	filter = params.filter
+	
+	
 	--reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildRounding(), 5.0)
 	if reaper.ImGui_BeginChild(ctx, "ChildPluginList") then
 		for i, sel in ipairs(params.sel_plug) do
+			if params.filter ~= "" and not string.match(plugin_list[i].key, filter) then
+				goto skip
+			end
 			if reaper.ImGui_Selectable(ctx, ("%d: %s"):format(i, plugin_list[i].title), sel) then
 				if not reaper.ImGui_IsKeyDown(ctx, reaper.ImGui_Mod_Ctrl()) then -- Clear selection when CTRL is not heldk
 					for j = 1, #params.sel_plug do
@@ -231,6 +242,7 @@ function plugin_list_view()
 				end
 				params.sel_plug[i] = not sel
 			end
+			::skip::
 		end
 		ImGui.EndChild(ctx)
 		reaper.ImGui_EndChild(ctx)
@@ -362,7 +374,7 @@ function controller_view()
 	function background_control(p)
 		reaper.ImGui_SeparatorText(ctx, "Background")
 		--if ImGui.TreeNode(ctx, "Parameters") then
-			if reaper.ImGui_BeginChild(ctx, p.preview_name, 0, 180, true) then
+			if reaper.ImGui_BeginChild(ctx, p.preview_name, 0, 205, true) then
 				
 				reaper.ImGui_PushItemWidth(ctx, 150)
 				local combo_items = "Color\0Gradient\0Image\0"
@@ -399,7 +411,11 @@ function controller_view()
 					reaper.ImGui_PopItemWidth(ctx)
 					--if g.mode == 1 then
 					--end
+					
 
+					_, g.color1 = ImGui.ColorEdit4(ctx, "Color 1", g.color1, ImGui.ColorEditFlags_NoInputs())
+					reaper.ImGui_SameLine(ctx)
+					_, g.color2 = ImGui.ColorEdit4(ctx, "Color 2", g.color2, ImGui.ColorEditFlags_NoInputs())
 					--reaper.ImGui_PushItemWidth(ctx, 100)
 					
 					_, p.width, p.height = reaper.ImGui_DragInt2(ctx, "width x height", p.width, p.height, 25, 2000)
@@ -519,6 +535,7 @@ function controller_view()
 						reaper.ImGui_EndPopup(ctx)
 					end
 				else
+				
 					reaper.ImGui_BeginDisabled(ctx, true)
 					reaper.ImGui_Text(ctx, p.file)
 					reaper.ImGui_EndDisabled(ctx)
@@ -715,7 +732,7 @@ function controller_view()
 	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
 	reaper.ImGui_SetCursorPos(ctx, posX, posY)
 
-	reaper.ImGui_BeginDisabled(ctx, not  (params.raw.do_raw or params.thumbnail.do_thumbnail or params.toolbar_thumbnail.do_toolbar_thumbnail))
+	reaper.ImGui_BeginDisabled(ctx, not  (params.raw.do_raw or params.thumbnail.do_thumbnail or params.toolbar_thumbnail.do_thumbnail))
 	if reaper.ImGui_Button(ctx, "Screenshot", size[1], size[2]) then
 		START_SCREENSHOT = true
 	end
