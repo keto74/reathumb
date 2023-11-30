@@ -104,12 +104,26 @@ local default = {
 	},
 }
 -- params
-local params = {}
-params.sel_plug = {}
+local plugins = {
+	in_available = {},
+	--available = {},
+	sel_available = {},
+	--selected = {},
+	sel_selected = {},
+}
 for _ = 1, #plugin_list do
-	params.sel_plug[#params.sel_plug + 1] = false
+	plugins.in_available[#plugins.in_available + 1] = true
+
+	--plugins.available[#plugins.available + 1] = true
+	plugins.sel_available[#plugins.sel_available + 1] = false
+
+	--plugins.selected[#plugins.selected + 1] = false
+	plugins.sel_selected[#plugins.sel_selected + 1] = false
 end
-params.filter = ""
+
+local params = {}
+params.filter_available = ""
+params.filter_selected = ""
 
 params.delay_s = 0.5
 params.cropping = deepcopy(default.cropping)
@@ -192,62 +206,222 @@ local path_toolbar_icons = reaper.GetResourcePath() .. "/Data/toolbar_icons/"
 ---
 
 function plugin_list_view()
- --ImGui.PushItemWidth(ctx, 100)
+	--ImGui.PushItemWidth(ctx, 100)
 	local size = { 100, 30 }
 	local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
-	local posX = (x - 2*size[1]) * 0.5
+	local posX = (x - 2 * size[1]) * 0.5
 	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
-	reaper.ImGui_SetCursorPos(ctx, posX, posY)
+	--reaper.ImGui_SetCursorPos(ctx, posX, posY)
 
-	local filter = string.lower(params.filter)
+	local filter = string.lower(params.filter_available)
+
+	reaper.ImGui_SeparatorText(ctx, "Plugin list")
+
+	reaper.ImGui_BeginDisabled(ctx, not any(plugins.sel_available))
+	if reaper.ImGui_Button(ctx, "Select", size[1], size[2]) then
+		for i, sel in ipairs(plugins.sel_available) do
+			if sel then
+				plugins.sel_available[i] = false
+				--plugins.available[i] = false
+				--plugins.selected[i] = true
+				plugins.in_available[i] = false
+				plugins.sel_selected[i] = true
+			end
+		end
+	end
+	reaper.ImGui_EndDisabled(ctx)
+
+	--[[reaper.ImGui_SameLine(ctx)
+
+	reaper.ImGui_BeginDisabled(ctx, not any(plugins.sel_selected))
+	if reaper.ImGui_Button(ctx, "Unselect", size[1], size[2]) then
+		for i, sel in ipairs(plugins.sel_selected) do
+			if sel then
+				plugins.sel_available[i] = true
+				plugins.available[i] = true
+				plugins.selected[i] = false
+				plugins.sel_selected[i] = false
+			end
+		end
+	end
+	reaper.ImGui_EndDisabled(ctx)
+	]]
+	--
+
+	reaper.ImGui_SameLine(ctx)
 
 	-- select all visible
 	if reaper.ImGui_Button(ctx, "All", size[1], size[2]) then
-		for i = 1, #params.sel_plug do
-			params.sel_plug[i] = params.sel_plug[i] or filter == "" or string.match(plugin_list[i].key, filter) ~= nil
+		for i = 1, #plugins.sel_available do
+			plugins.sel_available[i] = plugins.sel_available[i]
+				or filter == ""
+				or string.match(plugin_list[i].key, filter) ~= nil
 		end
 	end
 	if ImGui.IsItemHovered(ctx) then
 		ImGui.SetTooltip(ctx, "Select all visible plugins")
 	end
-	
-	
+
 	reaper.ImGui_SameLine(ctx)
-	
+
 	-- deselect all visible
 	if reaper.ImGui_Button(ctx, "None", size[1], size[2]) then
-		for i = 1, #params.sel_plug do
-				params.sel_plug[i] = params.sel_plug[i] and filter ~= "" and string.match(plugin_list[i].key, filter) == nil
+		for i = 1, #plugins.sel_available do
+			plugins.sel_available[i] = plugins.sel_available[i]
+				and filter ~= ""
+				and string.match(plugin_list[i].key, filter) == nil
 		end
 	end
 	if ImGui.IsItemHovered(ctx) then
 		ImGui.SetTooltip(ctx, "Unselect all visible plugins")
 	end
 
-	_, params.filter = reaper.ImGui_InputText(ctx, "Filter", params.filter, reaper.ImGui_InputTextFlags_EscapeClearsAll() |  reaper.ImGui_InputTextFlags_AutoSelectAll())
-	filter = params.filter
-	
-	
+	_, params.filter_available = reaper.ImGui_InputText(
+		ctx,
+		"Filter ",
+		params.filter_available,
+		reaper.ImGui_InputTextFlags_EscapeClearsAll() | reaper.ImGui_InputTextFlags_AutoSelectAll()
+	)
+	filter = params.filter_available
+
 	--reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildRounding(), 5.0)
-	if reaper.ImGui_BeginChild(ctx, "ChildPluginList") then
-		for i, sel in ipairs(params.sel_plug) do
+	--[[if reaper.ImGui_BeginChild(ctx, "ChildPluginList") then
+		for i, sel in ipairs(plugins.selected) do
 			if params.filter ~= "" and not string.match(plugin_list[i].key, filter) then
 				goto skip
 			end
 			if reaper.ImGui_Selectable(ctx, ("%d: %s"):format(i, plugin_list[i].title), sel) then
 				if not reaper.ImGui_IsKeyDown(ctx, reaper.ImGui_Mod_Ctrl()) then -- Clear selection when CTRL is not heldk
-					for j = 1, #params.sel_plug do
-						params.sel_plug[j] = false
+					for j = 1, #plugins.selected do
+						plugins.selected[j] = false
+						plugins.selected[j] = false
 					end
 				end
-				params.sel_plug[i] = not sel
+				plugins.selected[i] = not sel
 			end
 			::skip::
 		end
 		ImGui.EndChild(ctx)
 		reaper.ImGui_EndChild(ctx)
-	end
+	end]]
+	--
 	--reaper.ImGui_PopStyleVar(ctx)
+
+	--local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+	local listSize = 4 * size[2] + y / 4
+
+	if reaper.ImGui_BeginChild(ctx, "ChildAvailablePluginList", 0, listSize, true) then
+		for i, sel in ipairs(plugins.sel_available) do
+			if params.filter ~= "" and not string.match(plugin_list[i].key, filter) then
+				goto skip
+			end
+			if
+				plugins.in_available[i]
+				and reaper.ImGui_Selectable(ctx, ("%d: %s"):format(i, plugin_list[i].title), sel)
+			then
+				if not reaper.ImGui_IsKeyDown(ctx, reaper.ImGui_Mod_Ctrl()) then -- Clear selection when CTRL is not heldk
+					for j = 1, #plugins.sel_available do
+						plugins.sel_available[j] = false
+					end
+				end
+				plugins.sel_available[i] = not sel
+			end
+			::skip::
+		end
+		reaper.ImGui_EndChild(ctx)
+	end
+	local navailable = countTrue(plugins.in_available)
+	reaper.ImGui_Text(ctx, string.format("%d plugins", navailable))
+
+	--[[
+	local size = { 100, 30 }
+	local posX = (x - size[1]) / 3
+	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
+	reaper.ImGui_SetCursorPos(ctx, posX, posY)
+	]]
+	--
+
+	reaper.ImGui_SeparatorText(ctx, "Selection")
+
+	--reaper.ImGui_SameLine(ctx)
+
+	reaper.ImGui_BeginDisabled(ctx, not any(plugins.sel_selected))
+	if reaper.ImGui_Button(ctx, "Unselect", size[1], size[2]) then
+		for i, sel in ipairs(plugins.sel_selected) do
+			if sel then
+				plugins.sel_available[i] = true
+				--plugins.available[i] = true
+				--plugins.selected[i] = false
+				plugins.in_available[i] = true
+				plugins.sel_selected[i] = false
+			end
+		end
+	end
+	reaper.ImGui_EndDisabled(ctx)
+
+	reaper.ImGui_SameLine(ctx)
+
+	filter = params.filter_selected
+	-- select all visible
+	if reaper.ImGui_Button(ctx, "All ", size[1], size[2]) then
+		for i = 1, #plugins.sel_selected do
+			plugins.sel_selected[i] = plugins.sel_selected[i]
+				or filter == ""
+				or string.match(plugin_list[i].key, filter) ~= nil
+		end
+	end
+	if ImGui.IsItemHovered(ctx) then
+		ImGui.SetTooltip(ctx, "Select all visible plugins")
+	end
+
+	reaper.ImGui_SameLine(ctx)
+
+	-- deselect all visible
+	if reaper.ImGui_Button(ctx, "None ", size[1], size[2]) then
+		for i = 1, #plugins.sel_selected do
+			plugins.sel_selected[i] = plugins.sel_selected[i]
+				and filter ~= ""
+				and string.match(plugin_list[i].key, filter) == nil
+		end
+	end
+	if ImGui.IsItemHovered(ctx) then
+		ImGui.SetTooltip(ctx, "Unselect all visible plugins")
+	end
+
+	_, params.filter_selected = reaper.ImGui_InputText(
+		ctx,
+		"Filter",
+		params.filter_selected,
+		reaper.ImGui_InputTextFlags_EscapeClearsAll() | reaper.ImGui_InputTextFlags_AutoSelectAll()
+	)
+	filter = params.filter_selected
+
+	if reaper.ImGui_BeginChild(ctx, "ChildSelectedPluginList", 0, listSize, true) then
+		for i, sel in ipairs(plugins.sel_selected) do
+			if params.filter ~= "" and not string.match(plugin_list[i].key, filter) then
+				goto skip
+			end
+			if
+				not plugins.in_available[i]
+				and reaper.ImGui_Selectable(ctx, ("%d: %s"):format(i, plugin_list[i].title), sel)
+			then
+				if not reaper.ImGui_IsKeyDown(ctx, reaper.ImGui_Mod_Ctrl()) then -- Clear selection when CTRL is not heldk
+					for j = 1, #plugins.sel_selected do
+						plugins.sel_selected[j] = false
+					end
+				end
+				plugins.sel_selected[i] = not sel
+				if reaper.ImGui_IsMouseDoubleClicked(ctx) then
+					plugins.in_available[i] = true
+				end
+			end
+			::skip::
+		end
+		--ImGui.EndChild(ctx)
+		reaper.ImGui_EndChild(ctx)
+	end
+	local nselected = #plugins.in_available - navailable
+	reaper.ImGui_Text(ctx, string.format("%d plugins selected", nselected))
 end
 
 function create_background(p)
@@ -299,19 +473,19 @@ function controller_view()
 		if ImGui.IsItemHovered(ctx) then
 			ImGui.SetTooltip(ctx, "Filenames and destination")
 		end
-		
+
 		--reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_FramePadding(), 10, 10)
 		if reaper.ImGui_BeginChild(ctx, title, 0, 70, true) then
 			local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
 			reaper.ImGui_PushItemWidth(ctx, x / 3)
-			
+
 			_, p.fname_prefix = ImGui.InputText(ctx, "Prefix", p.fname_prefix)
 			if ImGui.IsItemHovered(ctx) then
 				ImGui.SetTooltip(ctx, "Filename(s) prefix")
 			end
-			
+
 			reaper.ImGui_SameLine(ctx)
-			
+
 			_, p.fname_suffix = ImGui.InputText(ctx, "Suffix", p.fname_suffix)
 			if ImGui.IsItemHovered(ctx) then
 				ImGui.SetTooltip(ctx, "Filename(s) suffix (without extension)")
@@ -326,25 +500,23 @@ function controller_view()
 			if ImGui.IsItemHovered(ctx) then
 				ImGui.SetTooltip(ctx, "Choose destination folder")
 			end
-			
+
 			reaper.ImGui_EndChild(ctx)
 		end
 		--reaper.ImGui_PopStyleVar(ctx)
 	end
 
 	function crop_control()
-	
-		
 		reaper.ImGui_SeparatorText(ctx, "Cropping")
 		if ImGui.IsItemHovered(ctx) then
 			ImGui.SetTooltip(ctx, "Screenshot cropping to remove window borders")
 		end
-		
+
 		if reaper.ImGui_BeginChild(ctx, "ChildCropping", 0, 100) then
 			local pc = params.cropping
-	
+
 			_, pc.do_crop = reaper.ImGui_Checkbox(ctx, "Crop window borders", pc.do_crop)
-			
+
 			reaper.ImGui_BeginDisabled(ctx, not pc.do_crop)
 			--if ImGui.TreeNode(ctx, "Cropping parameters") then
 			--reaper.ImGui_PushItemWidth(ctx, 100)
@@ -361,11 +533,10 @@ function controller_view()
 			if ImGui.IsItemHovered(ctx) then
 				ImGui.SetTooltip(ctx, "Reset cropping parameters to default values")
 			end
-			
+
 			reaper.ImGui_EndDisabled(ctx)
-	
+
 			reaper.ImGui_EndChild(ctx)
-			
 		end
 
 		--       ImGui.TreePop(ctx)
@@ -374,196 +545,191 @@ function controller_view()
 	function background_control(p)
 		reaper.ImGui_SeparatorText(ctx, "Background")
 		--if ImGui.TreeNode(ctx, "Parameters") then
-			if reaper.ImGui_BeginChild(ctx, p.preview_name, 0, 205, true) then
-				
-				reaper.ImGui_PushItemWidth(ctx, 150)
-				local combo_items = "Color\0Gradient\0Image\0"
-				_, p.mode = ImGui.Combo(ctx, "Mode", p.mode, combo_items)
+		if reaper.ImGui_BeginChild(ctx, p.preview_name, 0, 205, true) then
+			reaper.ImGui_PushItemWidth(ctx, 150)
+			local combo_items = "Color\0Gradient\0Image\0"
+			_, p.mode = ImGui.Combo(ctx, "Mode", p.mode, combo_items)
+			reaper.ImGui_PopItemWidth(ctx)
+
+			if p.mode == 0 then -- Color
+				--reaper.ImGui_SameLine(ctx)
+				reaper.ImGui_PushItemWidth(ctx, 100)
+				_, p.width, p.height = reaper.ImGui_DragInt2(ctx, "Width x Height", p.width, p.height, 1, 25, 2000)
 				reaper.ImGui_PopItemWidth(ctx)
-				
-				if p.mode == 0 then -- Color
-					--reaper.ImGui_SameLine(ctx)
-					reaper.ImGui_PushItemWidth(ctx, 100)
-					_, p.width, p.height = reaper.ImGui_DragInt2(ctx, "Width x Height", p.width, p.height, 1, 25, 2000)
-					reaper.ImGui_PopItemWidth(ctx)
-					_, p.color = ImGui.ColorEdit4(ctx, "Color", p.color, ImGui.ColorEditFlags_NoInputs())
-					if reaper.ImGui_Button(ctx, "Export...") then
-						local rv, path = reaper.JS_Dialog_BrowseForSaveFile(
-							"Save background",
-							thispath,
-							"background.png",
-							"Image (PNG)\0*.png\0\0"
-						)
-						if rv ~= 0 then
-							local background = create_background(p)
-							reaper.JS_LICE_WritePNG(path, background, false)
-							reaper.JS_LICE_DestroyBitmap(background)
-							p.preview = path
-						end
+				_, p.color = ImGui.ColorEdit4(ctx, "Color", p.color, ImGui.ColorEditFlags_NoInputs())
+				if reaper.ImGui_Button(ctx, "Export...") then
+					local rv, path = reaper.JS_Dialog_BrowseForSaveFile(
+						"Save background",
+						thispath,
+						"background.png",
+						"Image (PNG)\0*.png\0\0"
+					)
+					if rv ~= 0 then
+						local background = create_background(p)
+						reaper.JS_LICE_WritePNG(path, background, false)
+						reaper.JS_LICE_DestroyBitmap(background)
+						p.preview = path
 					end
-					background_preview()
-				elseif p.mode == 1 then -- Gradient
-					local g = p.gradient
-					reaper.ImGui_SameLine(ctx)
-					reaper.ImGui_PushItemWidth(ctx, 100)
-					local combo_items = "Conic\0Linear\0Radial\0"
-					_, g.mode = ImGui.Combo(ctx, "Type", g.mode, combo_items)
-					reaper.ImGui_PopItemWidth(ctx)
-					--if g.mode == 1 then
-					--end
-					
-
-					_, g.color1 = ImGui.ColorEdit4(ctx, "Color 1", g.color1, ImGui.ColorEditFlags_NoInputs())
-					reaper.ImGui_SameLine(ctx)
-					_, g.color2 = ImGui.ColorEdit4(ctx, "Color 2", g.color2, ImGui.ColorEditFlags_NoInputs())
-					--reaper.ImGui_PushItemWidth(ctx, 100)
-					
-					_, p.width, p.height = reaper.ImGui_DragInt2(ctx, "width x height", p.width, p.height, 25, 2000)
-					--if reaper.ImGui_BeginChild(ctx, "Gradient parameters", 0, 200, true) then
-						--reaper.ImGui_PopItemWidth(ctx)
-						if g.mode == 0 then -- conic
-							if reaper.ImGui_BeginChild(ctx, "ChildConic", 0, 85, true) then
-								local c = g.conic
-								if c.x == nil then
-									c.x = p.width / 2
-									c.y = p.height / 2
-								end
-								reaper.ImGui_SeparatorText(ctx, "Conic gradient")
-								--_, c.x = reaper.ImGui_DragInt(ctx, "x", c.x, 1)--, 0, p.width - 1)
-								--_, c.y = reaper.ImGui_DragInt(ctx, "y", c.y, 1)--, 0, p.height - 1)
-								reaper.ImGui_PushItemWidth(ctx, 100)
-								_, c.x, c.y = reaper.ImGui_DragInt2(ctx, "x, y", c.x, c.y, 1)--, 0, p.width - 1)
-								reaper.ImGui_SameLine(ctx)
-								_, c.angle = reaper.ImGui_DragDouble(ctx, "angle (rad)", c.angle, 1, 0, math.pi)
-								reaper.ImGui_PopItemWidth(ctx)
-							reaper.ImGui_EndChild(ctx)
-						end
-						elseif g.mode == 1 then -- linear
-							 reaper.ImGui_SeparatorText(ctx, "Linear gradient")
-							if reaper.ImGui_BeginChild(ctx, "ChildLinear", 0, 60, true) then
-								local l = g.linear
-								--reaper.ImGui_SameLine(ctx)
-								reaper.ImGui_PushItemWidth(ctx, 100)
-								local linear_items = "Horizontal\0Mix\0Vertical\0"
-								_, l.mode = ImGui.Combo(ctx, "Orientation", l.mode, linear_items)
-								reaper.ImGui_PopItemWidth(ctx)
-								
-								if l.mode == 0 then -- horizontal
-									if l.h.x1 == nil then
-										l.h.x1, l.h.x2 = 0, p.width - 1
-									end
-									_, l.h.x1, l.h.x2 = reaper.ImGui_DragInt2(ctx, "X start, end", l.h.x1, l.h.x2, 1) --, 0, p.width - 1)
-								elseif l.mode == 1 then -- mix
-									if l.mix.x1 == nil then
-										l.mix.x1, l.mix.x2 = 0, p.width - 1
-										l.v.x1, l.v.x2 = 0, p.height - 1
-									end
-									_, l.mix.x1, l.mix.x2 = reaper.ImGui_DragInt2(ctx, "X start, end", l.mix.x1, l.mix.x2, 1) --, 0, p.width - 1)
-									reaper.ImGui_SameLine(ctx)
-									_, l.mix.y1, l.mix.y2 = reaper.ImGui_DragInt2(ctx, "Y start, end", l.mix.y1, l.mix.y2, 1) --, 0, p.height - 1)
-								else -- vertical
-									if l.v.y1 == nil then
-										l.v.y1, l.v.y2 = 0, p.height - 1
-									end
-									_, l.v.y1, l.v.y2 = reaper.ImGui_DragInt2(ctx, "Y start, end", l.v.y1, l.v.y2, 1) --, 0, p.height - 1)
-								end
-								reaper.ImGui_EndChild(ctx)
-							end
-						else -- radial
-							if reaper.ImGui_BeginChild(ctx, "ChildRadial", 0, 85, true) then
-								reaper.ImGui_SeparatorText(ctx, "Radial gradient")
-								local r = g.radial
-								if r.x == nil then
-									r.x = p.width / 2
-									r.y = p.height / 2
-									r.radius = math.min(p.height, p.width) / 2
-								end
-								reaper.ImGui_PushItemWidth(ctx, 100)
-								--_, r.x = reaper.ImGui_DragInt(ctx, "x", r.x, 1, 0, p.width - 1)
-								--_, r.y = reaper.ImGui_DragInt(ctx, "y", r.y, 1, 0, p.height - 1)
-								_, r.x, r.y = reaper.ImGui_DragInt2(ctx, "x, y", r.x, r.y, 1)--, 0, p.width - 1)
-								-- local rad_max = math.max(p.height, p.width)/2
-								_, r.radius = reaper.ImGui_DragInt(ctx, "radius", r.radius, 1) -- , 0, rad_max)
-								reaper.ImGui_PopItemWidth(ctx)
-								reaper.ImGui_EndChild(ctx)
-							end
-						end
-					--     reaper.ImGui_EndChild(ctx)
-					--end
-					
-					local size = { 100, 30 }
-					local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
-					local posX = (x - size[1]) /3
-					local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
-					reaper.ImGui_SetCursorPos(ctx, posX, posY)
-					
-					if reaper.ImGui_Button(ctx, "Preview", size[1], size[2]) then
-						if p.preview == nil then
-							local background = create_background(p)
-							local path = datapath .. p.preview_name
-							p.preview = path
-							reaper.JS_LICE_WritePNG(path, background, true)
-							reaper.JS_LICE_DestroyBitmap(background)
-						end
-						reaper.ImGui_OpenPopup(ctx, p.preview_name)
-					end
-					if ImGui.IsItemHovered(ctx) then
-						ImGui.SetTooltip(ctx, "Open background preview popup")
-					end
-					
-					reaper.ImGui_SameLine(ctx)
-					if reaper.ImGui_Button(ctx, "Export", size[1], size[2]) then
-						local rv, path = reaper.JS_Dialog_BrowseForSaveFile(
-							"Save background",
-							thispath,
-							"background.png",
-							"Image (PNG)\0*.png\0\0"
-						)
-						if rv ~= 0 then
-							local bg = create_background(p)
-							reaper.JS_LICE_WritePNG(path, bg, false)
-						end
-					end
-					if ImGui.IsItemHovered(ctx) then
-						ImGui.SetTooltip(ctx, "Export background to file for reuse")
-					end
-					
-					if reaper.ImGui_BeginPopup(ctx, p.preview_name) then
-						local bitmap = reaper.ImGui_CreateImage(p.preview)
-						local w, h = reaper.ImGui_Image_GetSize(bitmap)
-						reaper.ImGui_Image(ctx, bitmap, w, h)
-						reaper.ImGui_EndPopup(ctx)
-					end
-				else
-				
-					reaper.ImGui_BeginDisabled(ctx, true)
-					reaper.ImGui_Text(ctx, p.file)
-					reaper.ImGui_EndDisabled(ctx)
-
-					--ImGui.PushItemWidth(ctx, 100)
-					local size = { 100, 30 }
-					local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
-					local posX = (x - size[1]) * 0.5
-					local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
-					reaper.ImGui_SetCursorPos(ctx, posX, posY)
-				
-					if reaper.ImGui_Button(ctx, "File", size[1], size[2]) then
-						local rv, file = reaper.GetUserFileNameForRead("", "Image", ".png")
-						if rv ~= 0 then
-							p.file = file
-						end
-					end
-					if ImGui.IsItemHovered(ctx) then
-						ImGui.SetTooltip(ctx, "Choose background location")
-					end
-					
-					--reaper.ImGui_SameLine(ctx)
-					
-					
 				end
-				reaper.ImGui_EndChild(ctx)
+				background_preview()
+			elseif p.mode == 1 then -- Gradient
+				local g = p.gradient
+				reaper.ImGui_SameLine(ctx)
+				reaper.ImGui_PushItemWidth(ctx, 100)
+				local combo_items = "Conic\0Linear\0Radial\0"
+				_, g.mode = ImGui.Combo(ctx, "Type", g.mode, combo_items)
+				reaper.ImGui_PopItemWidth(ctx)
+				--if g.mode == 1 then
+				--end
+
+				_, g.color1 = ImGui.ColorEdit4(ctx, "Color 1", g.color1, ImGui.ColorEditFlags_NoInputs())
+				reaper.ImGui_SameLine(ctx)
+				_, g.color2 = ImGui.ColorEdit4(ctx, "Color 2", g.color2, ImGui.ColorEditFlags_NoInputs())
+				--reaper.ImGui_PushItemWidth(ctx, 100)
+
+				_, p.width, p.height = reaper.ImGui_DragInt2(ctx, "width x height", p.width, p.height, 25, 2000)
+				--if reaper.ImGui_BeginChild(ctx, "Gradient parameters", 0, 200, true) then
+				--reaper.ImGui_PopItemWidth(ctx)
+				if g.mode == 0 then -- conic
+					if reaper.ImGui_BeginChild(ctx, "ChildConic", 0, 85, true) then
+						local c = g.conic
+						if c.x == nil then
+							c.x = p.width / 2
+							c.y = p.height / 2
+						end
+						reaper.ImGui_SeparatorText(ctx, "Conic gradient")
+						--_, c.x = reaper.ImGui_DragInt(ctx, "x", c.x, 1)--, 0, p.width - 1)
+						--_, c.y = reaper.ImGui_DragInt(ctx, "y", c.y, 1)--, 0, p.height - 1)
+						reaper.ImGui_PushItemWidth(ctx, 100)
+						_, c.x, c.y = reaper.ImGui_DragInt2(ctx, "x, y", c.x, c.y, 1) --, 0, p.width - 1)
+						reaper.ImGui_SameLine(ctx)
+						_, c.angle = reaper.ImGui_DragDouble(ctx, "angle (rad)", c.angle, 1, 0, math.pi)
+						reaper.ImGui_PopItemWidth(ctx)
+						reaper.ImGui_EndChild(ctx)
+					end
+				elseif g.mode == 1 then -- linear
+					reaper.ImGui_SeparatorText(ctx, "Linear gradient")
+					if reaper.ImGui_BeginChild(ctx, "ChildLinear", 0, 60, true) then
+						local l = g.linear
+						--reaper.ImGui_SameLine(ctx)
+						reaper.ImGui_PushItemWidth(ctx, 100)
+						local linear_items = "Horizontal\0Mix\0Vertical\0"
+						_, l.mode = ImGui.Combo(ctx, "Orientation", l.mode, linear_items)
+						reaper.ImGui_PopItemWidth(ctx)
+
+						if l.mode == 0 then -- horizontal
+							if l.h.x1 == nil then
+								l.h.x1, l.h.x2 = 0, p.width - 1
+							end
+							_, l.h.x1, l.h.x2 = reaper.ImGui_DragInt2(ctx, "X start, end", l.h.x1, l.h.x2, 1) --, 0, p.width - 1)
+						elseif l.mode == 1 then -- mix
+							if l.mix.x1 == nil then
+								l.mix.x1, l.mix.x2 = 0, p.width - 1
+								l.v.x1, l.v.x2 = 0, p.height - 1
+							end
+							_, l.mix.x1, l.mix.x2 = reaper.ImGui_DragInt2(ctx, "X start, end", l.mix.x1, l.mix.x2, 1) --, 0, p.width - 1)
+							reaper.ImGui_SameLine(ctx)
+							_, l.mix.y1, l.mix.y2 = reaper.ImGui_DragInt2(ctx, "Y start, end", l.mix.y1, l.mix.y2, 1) --, 0, p.height - 1)
+						else -- vertical
+							if l.v.y1 == nil then
+								l.v.y1, l.v.y2 = 0, p.height - 1
+							end
+							_, l.v.y1, l.v.y2 = reaper.ImGui_DragInt2(ctx, "Y start, end", l.v.y1, l.v.y2, 1) --, 0, p.height - 1)
+						end
+						reaper.ImGui_EndChild(ctx)
+					end
+				else -- radial
+					if reaper.ImGui_BeginChild(ctx, "ChildRadial", 0, 85, true) then
+						reaper.ImGui_SeparatorText(ctx, "Radial gradient")
+						local r = g.radial
+						if r.x == nil then
+							r.x = p.width / 2
+							r.y = p.height / 2
+							r.radius = math.min(p.height, p.width) / 2
+						end
+						reaper.ImGui_PushItemWidth(ctx, 100)
+						--_, r.x = reaper.ImGui_DragInt(ctx, "x", r.x, 1, 0, p.width - 1)
+						--_, r.y = reaper.ImGui_DragInt(ctx, "y", r.y, 1, 0, p.height - 1)
+						_, r.x, r.y = reaper.ImGui_DragInt2(ctx, "x, y", r.x, r.y, 1) --, 0, p.width - 1)
+						-- local rad_max = math.max(p.height, p.width)/2
+						_, r.radius = reaper.ImGui_DragInt(ctx, "radius", r.radius, 1) -- , 0, rad_max)
+						reaper.ImGui_PopItemWidth(ctx)
+						reaper.ImGui_EndChild(ctx)
+					end
+				end
+				--     reaper.ImGui_EndChild(ctx)
+				--end
+
+				local size = { 100, 30 }
+				local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+				local posX = (x - size[1]) / 3
+				local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
+				reaper.ImGui_SetCursorPos(ctx, posX, posY)
+
+				if reaper.ImGui_Button(ctx, "Preview", size[1], size[2]) then
+					if p.preview == nil then
+						local background = create_background(p)
+						local path = datapath .. p.preview_name
+						p.preview = path
+						reaper.JS_LICE_WritePNG(path, background, true)
+						reaper.JS_LICE_DestroyBitmap(background)
+					end
+					reaper.ImGui_OpenPopup(ctx, p.preview_name)
+				end
+				if ImGui.IsItemHovered(ctx) then
+					ImGui.SetTooltip(ctx, "Open background preview popup")
+				end
+
+				reaper.ImGui_SameLine(ctx)
+				if reaper.ImGui_Button(ctx, "Export", size[1], size[2]) then
+					local rv, path = reaper.JS_Dialog_BrowseForSaveFile(
+						"Save background",
+						thispath,
+						"background.png",
+						"Image (PNG)\0*.png\0\0"
+					)
+					if rv ~= 0 then
+						local bg = create_background(p)
+						reaper.JS_LICE_WritePNG(path, bg, false)
+					end
+				end
+				if ImGui.IsItemHovered(ctx) then
+					ImGui.SetTooltip(ctx, "Export background to file for reuse")
+				end
+
+				if reaper.ImGui_BeginPopup(ctx, p.preview_name) then
+					local bitmap = reaper.ImGui_CreateImage(p.preview)
+					local w, h = reaper.ImGui_Image_GetSize(bitmap)
+					reaper.ImGui_Image(ctx, bitmap, w, h)
+					reaper.ImGui_EndPopup(ctx)
+				end
+			else
+				reaper.ImGui_BeginDisabled(ctx, true)
+				reaper.ImGui_Text(ctx, p.file)
+				reaper.ImGui_EndDisabled(ctx)
+
+				--ImGui.PushItemWidth(ctx, 100)
+				local size = { 100, 30 }
+				local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+				local posX = (x - size[1]) * 0.5
+				local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
+				reaper.ImGui_SetCursorPos(ctx, posX, posY)
+
+				if reaper.ImGui_Button(ctx, "File", size[1], size[2]) then
+					local rv, file = reaper.GetUserFileNameForRead("", "Image", ".png")
+					if rv ~= 0 then
+						p.file = file
+					end
+				end
+				if ImGui.IsItemHovered(ctx) then
+					ImGui.SetTooltip(ctx, "Choose background location")
+				end
+
+				--reaper.ImGui_SameLine(ctx)
 			end
-			--ImGui.TreePop(ctx)
+			reaper.ImGui_EndChild(ctx)
+		end
+		--ImGui.TreePop(ctx)
 		--end
 	end
 	function raw_control()
@@ -630,7 +796,7 @@ function controller_view()
 		reaper.ImGui_EndDisabled(ctx)
 		reaper.ImGui_BeginDisabled(ctx, not tb.do_thumbnail)
 		--if ImGui.TreeNode(ctx, "Parameters") then
-				--[[
+		--[[
 			_, tb.default_destination =
 				reaper.ImGui_Checkbox(ctx, "Reaper toolbar icons folder", tb.default_destination)
 			if not tb.default_destination then
@@ -642,28 +808,26 @@ function controller_view()
 				end
 			end
 			]]
-			--
-			destination_control(tb, "Toolbar icons folder")
-			background_control(tb.background)
-			
-			
-			reaper.ImGui_SeparatorText(ctx, "Overlays")
-			if reaper.ImGui_BeginChild(ctx, "ChildOverlay", 0, 40, true) then
-				
-				local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
-				local w = 50
-				reaper.ImGui_SetCursorPos(ctx, w, y/2)
-				
-				_, tb.color_hover = ImGui.ColorEdit4(ctx, "Hover overlay", tb.color_hover, ImGui.ColorEditFlags_NoInputs())
-				reaper.ImGui_SameLine(ctx)
-				
-				reaper.ImGui_SetCursorPos(ctx, x /2 + w, y/2)
-				
-				_, tb.color_click = ImGui.ColorEdit4(ctx, "Click overlay", tb.color_click, ImGui.ColorEditFlags_NoInputs())
-				reaper.ImGui_EndChild(ctx)
-			end
-			--toolbar_maker_control()
-			--ImGui.TreePop(ctx)
+		--
+		destination_control(tb, "Toolbar icons folder")
+		background_control(tb.background)
+
+		reaper.ImGui_SeparatorText(ctx, "Overlays")
+		if reaper.ImGui_BeginChild(ctx, "ChildOverlay", 0, 40, true) then
+			local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
+			local w = 50
+			reaper.ImGui_SetCursorPos(ctx, w, y / 2)
+
+			_, tb.color_hover = ImGui.ColorEdit4(ctx, "Hover overlay", tb.color_hover, ImGui.ColorEditFlags_NoInputs())
+			reaper.ImGui_SameLine(ctx)
+
+			reaper.ImGui_SetCursorPos(ctx, x / 2 + w, y / 2)
+
+			_, tb.color_click = ImGui.ColorEdit4(ctx, "Click overlay", tb.color_click, ImGui.ColorEditFlags_NoInputs())
+			reaper.ImGui_EndChild(ctx)
+		end
+		--toolbar_maker_control()
+		--ImGui.TreePop(ctx)
 		--end
 		reaper.ImGui_EndDisabled(ctx)
 	end
@@ -732,7 +896,10 @@ function controller_view()
 	local posY = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
 	reaper.ImGui_SetCursorPos(ctx, posX, posY)
 
-	reaper.ImGui_BeginDisabled(ctx, not  (params.raw.do_raw or params.thumbnail.do_thumbnail or params.toolbar_thumbnail.do_thumbnail))
+	reaper.ImGui_BeginDisabled(
+		ctx,
+		not (params.raw.do_raw or params.thumbnail.do_thumbnail or params.toolbar_thumbnail.do_thumbnail)
+	)
 	if reaper.ImGui_Button(ctx, "Screenshot", size[1], size[2]) then
 		START_SCREENSHOT = true
 	end
@@ -750,50 +917,50 @@ function controller_view()
 		--local x, y = reaper.ImGui_GetContentRegionAvail(ctx)
 		local x = reaper.ImGui_GetCursorPosX(ctx)
 		local y = reaper.ImGui_GetCursorPosY(ctx) --+ size[2]
-	
-		--reaper.ImGui_SetCursorPos(ctx, x, y) 
+
+		--reaper.ImGui_SetCursorPos(ctx, x, y)
 		preview_image("Original", params.raw.preview)
-		--reaper.ImGui_SetCursorPos(ctx, x + w, y) 
+		--reaper.ImGui_SetCursorPos(ctx, x + w, y)
 		reaper.ImGui_SameLine(ctx)
 		preview_image("Normal icon", params.thumbnail.preview)
 		reaper.ImGui_SameLine(ctx)
 		preview_toolbar_image("Toolbar icon", params.toolbar_thumbnail.preview)
 		reaper.ImGui_EndChild(ctx)
 	end
-	
+
 	--reaper.ImGui_SeparatorText(ctx, "Exports & customization")
 	--if ImGui.BeginChild(ctx, "ChildCustom", 0, 480, true) then
-		
-		--reaper.ImGui_SeparatorText(ctx, "Original image")
-		if reaper.ImGui_CollapsingHeader(ctx, "Original image export") then
-			if ImGui.BeginChild(ctx, "ChildOriginal", 0, 135, true) then
-				raw_control()
-				reaper.ImGui_EndChild(ctx)
-			end
+
+	--reaper.ImGui_SeparatorText(ctx, "Original image")
+	reaper.ImGui_SeparatorText(ctx, "Exports")
+
+	if reaper.ImGui_CollapsingHeader(ctx, "Original image export") then
+		if ImGui.BeginChild(ctx, "ChildOriginal", 0, 135, true) then
+			raw_control()
+			reaper.ImGui_EndChild(ctx)
 		end
-		
-		--reaper.ImGui_SeparatorText(ctx, "Normal icon")
-		if reaper.ImGui_CollapsingHeader(ctx, "Simple icon export") then
-		if ImGui.BeginChild(ctx, "ChildNormal", 0, 340, true) then
+	end
+
+	--reaper.ImGui_SeparatorText(ctx, "Normal icon")
+	if reaper.ImGui_CollapsingHeader(ctx, "Simple icon export") then
+		if ImGui.BeginChild(ctx, "ChildNormal", 0, 365, true) then
 			thumbnail_control()
 			reaper.ImGui_EndChild(ctx)
 		end
+	end
+	if reaper.ImGui_CollapsingHeader(ctx, "Toolbar icon export") then
+		if ImGui.BeginChild(ctx, "ChilToolbarIcon", 0, 455, true) then
+			thumbnail_toolbar_control()
+			reaper.ImGui_EndChild(ctx)
 		end
-		if reaper.ImGui_CollapsingHeader(ctx, "Toolbar icon export") then
-			if ImGui.BeginChild(ctx, "ChilToolbarIcon", 0, 430, true) then
-				thumbnail_toolbar_control()
-				reaper.ImGui_EndChild(ctx)
-			end
-		end
-		--reaper.ImGui_EndChild(ctx)
+	end
+	--reaper.ImGui_EndChild(ctx)
 	--end
 	reaper.ImGui_PopStyleVar(ctx)
 
 	--toolbar_maker_control()
 	--ImGui.PopItemWidth(ctx)
 	-- screenshot button
-
-	ImGui.EndChild(ctx) -- right pannel
 end
 
 function CreateToolbar()
@@ -969,10 +1136,12 @@ function Main()
 		)
 	then
 		plugin_list_view()
+		ImGui.EndChild(ctx)
 	end
 	ImGui.SameLine(ctx)
 	if ImGui.BeginChild(ctx, "ChildR", ImGui.GetContentRegionAvail(ctx), ImGui.GetWindowHeight(ctx), false, nil) then
 		controller_view()
+		ImGui.EndChild(ctx)
 	end
 
 	-- Actions
@@ -983,7 +1152,7 @@ function Main()
 		-- gather selected plugin list
 		SELECTED_PLUGS_TITLES = {}
 		SELECTED_PLUGS = {}
-		for i, sel in ipairs(params.sel_plug) do
+		for i, sel in ipairs(plugins.sel_available) do
 			if sel then
 				SELECTED_PLUGS_TITLES[#SELECTED_PLUGS_TITLES + 1] = plugin_list[i].title
 				SELECTED_PLUGS[#SELECTED_PLUGS + 1] = plugin_list[i]

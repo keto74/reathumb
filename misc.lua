@@ -239,3 +239,20 @@ function deepcopy(orig)
 	return copy
 end
 
+
+function any(t)
+  for _, v in ipairs(t) do
+    if v then return true end
+  end
+  return false
+end
+
+function countTrue(t)
+  local c = 0
+  for _, v in ipairs(t) do
+    if v then
+      c = c + 1
+    end
+  end
+  return c
+end
